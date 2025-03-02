@@ -41,21 +41,34 @@ describe('AuthService', () => {
         password: 'password123'
       };
       
-      const mockUser = {
-        id: 1,
-        ...userData,
-        role: 'player'
+      // Mock the User.build method
+      const mockUserInstance = {
+        username: userData.username,
+        email: userData.email,
+        password_hash: '',
+        role: 'player',
+        password: undefined,
+        save: jest.fn().mockResolvedValue({
+          id: 1,
+          username: userData.username,
+          email: userData.email,
+          role: 'player'
+        })
       };
       
-      (User.create as jest.Mock).mockResolvedValue(mockUser);
+      (User.build as jest.Mock).mockReturnValue(mockUserInstance);
       
       const result = await authService.createUser(userData);
       
-      expect(User.create).toHaveBeenCalledWith({
-        ...userData,
+      expect(User.build).toHaveBeenCalledWith({
+        username: userData.username,
+        email: userData.email,
+        password_hash: '',
         role: 'player'
       });
-      expect(result).toEqual(mockUser);
+      
+      expect(mockUserInstance.password).toEqual(userData.password);
+      expect(mockUserInstance.save).toHaveBeenCalled();
     });
   });
   
