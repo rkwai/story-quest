@@ -8,7 +8,8 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "test": "jest",
-    "cucumber": "cucumber-js --require \"features/step_definitions/**/*.js\" features/",
+    "cucumber": "cucumber-js",
+    "test:features": "cucumber-js",
     "lint": "eslint . --ext .ts",
     "seed": "ts-node src/db/seed.ts",
     "backend": "cd backend && npm run dev",
@@ -28,6 +29,13 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@cucumber/cucumber": "^10.0.1",
+    "@types/chai": "^4.3.6",
+    "@types/node": "^20.10.0",
+    "axios": "^1.6.2",
+    "chai": "^4.3.10",
+    "concurrently": "^8.2.2",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0"
   }
 } 
