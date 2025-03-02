@@ -1,0 +1,1 @@
+export { default as CharacterCreationPage } from './pages/CharacterCreationPage'; 

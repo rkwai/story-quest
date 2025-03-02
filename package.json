@@ -1,0 +1,33 @@
+{
+  "name": "story-quest-backend",
+  "version": "1.0.0",
+  "description": "A web-based D&D-inspired RPG with an LLM-powered Dungeon Master",
+  "main": "index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc",
+    "test": "jest",
+    "cucumber": "cucumber-js --require \"features/step_definitions/**/*.js\" features/",
+    "lint": "eslint . --ext .ts",
+    "seed": "ts-node src/db/seed.ts",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "dev:all": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "build:all": "cd backend && npm run build && cd ../frontend && npm run build",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "rpg",
+    "d&d",
+    "llm",
+    "ai",
+    "dungeon-master",
+    "game"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+} 

@@ -1,0 +1,16 @@
+This is StoryQuest, a web-based D&D-inspired RPG with an LLM-powered Dungeon Master.
+
+- Use Typescript with strict type checking.
+- Backend: Node.js with Express.js, PostgreSQL for data.
+- Frontend: React.js with Redux for state management.
+- Integrate LLM via a dedicated service (e.g., OpenAI GPT).
+- Use Cucumber for BDD tests, organized by feature modules.
+- Write unit tests with Jest for backend and frontend.
+- Secure endpoints with JWT authentication.
+- Follow RESTful API conventions.
+- Use ESLint and Prettier for code consistency.
+- Validate and sanitize all user inputs.
+- Optimize LLM context for narrative coherence.
+- Comment code clearly and update README regularly.
+- Use Git with feature branches and meaningful commits.
+- Set up CI/CD for testing and deployment. 

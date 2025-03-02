@@ -1,0 +1,1 @@
+export { default as CampaignDetailPage } from './pages/CampaignDetailPage'; 
