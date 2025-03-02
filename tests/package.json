@@ -1,0 +1,6 @@
+{
+  "name": "story-quest-tests",
+  "version": "1.0.0",
+  "description": "Tests for StoryQuest",
+  "type": "module"
+} 

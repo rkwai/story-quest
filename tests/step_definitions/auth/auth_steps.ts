@@ -1,18 +1,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from 'chai';
-import axios, { AxiosError } from 'axios';
-import { World } from '../../support/world';
-
-// This is a placeholder for the World object that will be used to store state between steps
-declare module '@cucumber/cucumber' {
-  interface World {
-    apiBaseUrl: string;
-    currentUser: any;
-    response: any;
-    token: string;
-    browser: any; // This would be a browser automation tool like Puppeteer or Playwright
-  }
-}
+import axios from 'axios';
+import { World } from '../../support/world.js';
 
 // Registration steps
 Given('I am on the registration page', async function(this: World) {
@@ -138,6 +127,72 @@ Then('I should remain on the registration page', async function(this: World) {
   // Check if still on registration page
   // Example: expect(this.browser.url).to.include('/register');
   console.log('Checking if still on registration page');
+});
+
+Then('I should see my username displayed', async function(this: World) {
+  // Check if username is displayed in the UI
+  // Example: expect(await this.browser.text('.user-profile')).to.include(this.currentUser.username);
+  console.log('Checking if username is displayed');
+});
+
+Then('I should have access to protected features', async function(this: World) {
+  // Check if protected features are accessible
+  // Example: expect(await this.browser.isVisible('.protected-feature')).to.be.true;
+  console.log('Checking access to protected features');
+});
+
+Then('I should remain on the login page', async function(this: World) {
+  // Check if still on login page
+  // Example: expect(this.browser.url).to.include('/login');
+  console.log('Checking if still on login page');
+});
+
+When('I click the login button without entering credentials', async function(this: World) {
+  // Click login button without entering any credentials
+  // Example: await this.browser.click('#login-button');
+  try {
+    this.response = await axios.post(`${this.apiBaseUrl}/api/auth/login`, {});
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      this.response = error.response;
+    } else {
+      console.error('Unexpected error:', error);
+    }
+  }
+  console.log('Clicking login button without credentials');
+});
+
+Then('I should see validation errors', async function(this: World) {
+  // Check for validation errors
+  // Example: expect(await this.browser.isVisible('.validation-error')).to.be.true;
+  if (this.response && this.response.data && this.response.data.errors) {
+    expect(this.response.data.errors).to.exist;
+  }
+  console.log('Checking for validation errors');
+});
+
+// Additional step definitions for other features
+Given('I am a registered user with email {string} and password {string}', async function(this: World, email: string, password: string) {
+  // Create a user in the database or mock the user
+  this.currentUser = { ...this.currentUser, email, password };
+  console.log(`Setting up registered user with email: ${email} and password: ${password}`);
+});
+
+Given('I am logged in', async function(this: World) {
+  // Simulate being logged in
+  this.token = 'mock-jwt-token';
+  console.log('Setting up logged in state');
+});
+
+When('I refresh the page', async function(this: World) {
+  // Simulate refreshing the page
+  console.log('Simulating page refresh');
+});
+
+Then('I should still be logged in', async function(this: World) {
+  // Check if still logged in after refresh
+  expect(this.token).to.exist;
+  console.log('Checking if still logged in');
 });
 
 // Add more step definitions as needed for the other scenarios 

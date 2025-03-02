@@ -34,4 +34,6 @@ class CustomWorld extends CucumberWorld implements World {
   }
 }
 
-setWorldConstructor(CustomWorld); 
+setWorldConstructor(CustomWorld);
+
+export { CustomWorld }; 
