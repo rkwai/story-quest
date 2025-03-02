@@ -141,14 +141,21 @@ If you prefer to install manually:
 story-quest/
 ├── backend/                # Backend code
 │   ├── src/
-│   │   ├── controllers/    # Request handlers
-│   │   ├── middleware/     # Express middleware
-│   │   ├── models/         # Sequelize models
-│   │   ├── routes/         # API routes
-│   │   ├── services/       # Business logic
-│   │   ├── utils/          # Utility functions
-│   │   ├── db/             # Database configuration
-│   │   └── index.ts        # Entry point
+│   │   ├── features/       # Feature modules (routes, controllers, services)
+│   │   │   ├── auth/       # Authentication feature
+│   │   │   ├── campaigns/  # Campaigns feature
+│   │   │   ├── characters/ # Characters feature
+│   │   │   ├── items/      # Items feature
+│   │   │   ├── storyPosts/ # Story posts feature
+│   │   │   └── dmResponses/# DM responses feature
+│   │   ├── shared/         # Shared code
+│   │   │   ├── middleware/ # Express middleware
+│   │   │   ├── db/         # Database configuration
+│   │   │   ├── config/     # Application configuration
+│   │   │   └── services/   # Shared services
+│   │   ├── app.ts          # Express application setup
+│   │   ├── server.ts       # Server initialization
+│   │   └── index.ts        # Application entry point
 │   ├── tests/              # Backend tests
 │   └── package.json
 ├── frontend/               # Frontend code
