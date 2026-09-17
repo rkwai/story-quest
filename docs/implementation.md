@@ -19,7 +19,8 @@ Updated: 2026-09-17. This file is the handoff across sessions. Checkboxes mean i
 - [x] Private diagnostic traces and versioned prompts.
 - [x] Meaningful engine/database/phone-flow verification and production build.
 - [x] Push implementation to master; GitHub CI passed on b76f10a.
-- [ ] Verify hosted production deployment and real model turn.
+- [x] Verify hosted production sample deployment (READY and HTTP 200).
+- [ ] Configure hosted Supabase and verify a real authenticated model turn.
 
 ## Phase 2 — Prove continuity
 
@@ -35,7 +36,9 @@ Stream narration, replay UI for operators, player correction reports tied to tur
 
 ## Deployment access
 
-Initial inspection: repository accessible; no Vercel/Supabase project configuration or credentials in this workspace. Both plugins were subsequently connected successfully by Rick, and installed status was verified. Their operational tools were not exposed in the active session (only GitHub and plugin-management tools were callable). Do not ask Rick to reconnect them. Refresh tool discovery in the next turn and use the connected providers. Live deployment and provider calls remain unverified until projects and model configuration are applied. A push to master is not evidence of a successful Vercel deployment.
+Vercel and Supabase operational tools are now available. Production sample: https://story-quest-seven.vercel.app (application commit `30cc66d`, deployment READY; expected page returned HTTP 200). Deployment used the connected app with source files. Git-triggered releases are not linked yet. See docs/deployment.md for provider IDs and exact verification limits.
+
+Supabase has no StoryQuest project. Await organization selection (available: datasaa) and mandatory cost acknowledgment before creating one. Hosted migration, auth, server credentials and explicit model selection remain outstanding.
 
 ## Next session
 
@@ -49,8 +52,6 @@ Read completed items and latest verification below. Continue the earliest incomp
 - Phone browser smoke passes: action -> discovery -> claim labeling -> reload persistence -> World/Character navigation; no horizontal overflow. Initial phone and desktop screens visually inspected.
 - Production dependency audit: no known vulnerabilities reported during this pass.
 - TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
-- Supabase hosted migration, email sign-in, actual model responses and Vercel live deployment still require verification in the connected accounts. Local database tests do not establish hosted access or deployment success.
+- Supabase hosted migration, email sign-in and actual model responses still require verification. Local database tests do not establish hosted access. The Vercel production sample is verified separately above.
 
-Vercel CLI 59.20.0 was also checked: it reports login_required. Plugin connection has not supplied CLI deployment authentication.
-
-Next action: discover the now-connected Vercel and Supabase tools, identify/create the StoryQuest projects, apply migration and environment settings, deploy master, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.
+Next action: provision the dedicated Supabase project after required organization/cost confirmation, apply migration and environment settings, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.
