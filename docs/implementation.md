@@ -20,7 +20,8 @@ Updated: 2026-09-17. This file is the handoff across sessions. Checkboxes mean i
 - [x] Meaningful engine/database/phone-flow verification and production build.
 - [x] Push implementation to master; GitHub CI passed on b76f10a.
 - [x] Verify hosted production sample deployment (READY and HTTP 200).
-- [ ] Configure hosted Supabase and verify a real authenticated model turn.
+- [x] Create dedicated DataSaa Supabase project, apply schema and verify server-only access.
+- [ ] Configure auth/environment values and verify a real authenticated model turn.
 
 ## Phase 2 — Prove continuity
 
@@ -38,7 +39,7 @@ Stream narration, replay UI for operators, player correction reports tied to tur
 
 Vercel and Supabase operational tools are now available. Production sample: https://story-quest-seven.vercel.app (application commit `30cc66d`, deployment READY; expected page returned HTTP 200). Deployment used the connected app with source files. Git-triggered releases are not linked yet. See docs/deployment.md for provider IDs and exact verification limits.
 
-Supabase has no StoryQuest project. Await organization selection (available: datasaa) and mandatory cost acknowledgment before creating one. Hosted migration, auth, server credentials and explicit model selection remain outstanding.
+Supabase project `cpybqwezigwkhxldxwiv` is ACTIVE_HEALTHY under DataSaa at the provider-quoted $0/month. Migration `20260917084314_story_engine.sql` is applied; table RLS and browser access denial verified. Security advisor returned only intentional informational no-policy notices. Auth settings, production environment values and explicit model selection remain outstanding; exact dashboard links and configuration are in docs/deployment.md.
 
 ## Next session
 
@@ -52,6 +53,6 @@ Read completed items and latest verification below. Continue the earliest incomp
 - Phone browser smoke passes: action -> discovery -> claim labeling -> reload persistence -> World/Character navigation; no horizontal overflow. Initial phone and desktop screens visually inspected.
 - Production dependency audit: no known vulnerabilities reported during this pass.
 - TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
-- Supabase hosted migration, email sign-in and actual model responses still require verification. Local database tests do not establish hosted access. The Vercel production sample is verified separately above.
+- Hosted migration and database access controls are verified. Email sign-in and actual model responses still require verification. The Vercel production sample is verified separately above.
 
-Next action: provision the dedicated Supabase project after required organization/cost confirmation, apply migration and environment settings, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.
+Next action: configure Supabase Auth URL/email settings and the five Vercel environment values, redeploy, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.

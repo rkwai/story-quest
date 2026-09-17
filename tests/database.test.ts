@@ -14,7 +14,7 @@ test('Postgres enforces private state, atomic revisions, ownership and turn idem
  const db=new PGlite();
  try {
   await db.exec(`create schema auth; create table auth.users(id uuid primary key); create role anon; create role authenticated; create role service_role bypassrls; insert into auth.users values('${owner}'),('${other}');`);
-  await db.exec(await readFile('supabase/migrations/202609170001_story_engine.sql','utf8'));
+  await db.exec(await readFile('supabase/migrations/20260917084314_story_engine.sql','utf8'));
   const seed=seedWorld();
   const created=await db.query<{id:string}>('select public.create_campaign($1,$2,$3) as id',[owner,seed.title,JSON.stringify(seed)]);
   const campaign=created.rows[0].id;

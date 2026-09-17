@@ -26,4 +26,26 @@ Promote a known-good Vercel deployment or revert the bad application commit. Kee
 
 The connected app deployed tracked active source files directly (legacy and environment files excluded). Automatic GitHub deployment linkage has not been configured. Continue explicit production releases until linkage is verified. CLI login polling was blocked by workspace network policy; use the operational connected app rather than assuming CLI authentication succeeded.
 
-Supabase discovery found organization `datasaa` (`pevdfgjydqafmcscwqpt`) and no StoryQuest project. Do not repurpose unrelated projects. The project creation tool requires organization selection and cost acknowledgment before provisioning. Next: obtain that selection, quote provider cost, create a dedicated project, apply the migration, configure auth and server secrets/model, then test a real turn. No hosted Supabase migration or paid model evaluation has run.
+## Hosted Supabase
+
+Project `story-quest` (`cpybqwezigwkhxldxwiv`) is ACTIVE_HEALTHY under DataSaa (`pevdfgjydqafmcscwqpt`), us-east-1, close to the Vercel server region. Rick selected the organization; the provider quoted $0/month and its cost-confirmation step completed. [Project dashboard](https://supabase.com/dashboard/project/cpybqwezigwkhxldxwiv).
+
+Migration `story_engine` was applied successfully as remote version `20260917084314`. The local filename now matches that version to avoid duplicate application by future CLI pushes. Four application tables have RLS enabled, anon/authenticated have no SELECT privileges, and service_role has CRUD access. The security advisor reported only four informational [RLS enabled with no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) findings. This is intentional: authoritative snapshots, hidden history and traces are server-only. Do not add browser read policies to silence them.
+
+## Remaining live configuration
+
+The connected tools expose public keys but no server key retrieval, Supabase Auth configuration setter, or Vercel environment setter. Configure the following in [Vercel environment settings](https://vercel.com/rick-wongs-projects-3b8edb49/story-quest/settings/environment-variables), target Production:
+
+| Variable | Value/source |
+| --- | --- |
+| NEXT_PUBLIC_SUPABASE_URL | https://cpybqwezigwkhxldxwiv.supabase.co |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | Enabled publishable key from this project's API settings |
+| SUPABASE_SERVICE_ROLE_KEY | This project's server-only service-role key; never put it in chat or git |
+| OPENAI_API_KEY | Server-only OpenAI project key with billing enabled |
+| STORY_MODEL | Explicit model ID supported by that account, with Chat Completions JSON Schema |
+
+In [Supabase Auth URL configuration](https://supabase.com/dashboard/project/cpybqwezigwkhxldxwiv/auth/url-configuration), set Site URL to https://story-quest-seven.vercel.app and register that exact redirect origin plus http://localhost:3000 for local testing. Confirm email provider is enabled. Default Supabase SMTP is limited to organization-team addresses; Rick can demo using his team email. Public signups need custom SMTP ([provider documentation](https://supabase.com/docs/guides/auth/auth-smtp)).
+
+After configuration, redeploy so public keys are included in the client build. Test sign-in, create campaign, commit a turn, complete narration, reload, inspect traces and confirm hidden facts remain server-only. The application stays in scripted-sample mode until all five values are present. Hosted auth and a real paid model turn remain unverified; TypeSafe is still optional.
+
+Package engines now pins Node 22.x, matching CI, because the initial Vercel deployment selected Node 24 from the former >=22 range.
