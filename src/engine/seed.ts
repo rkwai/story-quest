@@ -8,15 +8,18 @@ export function seedWorld(name = 'Rowan', premise = 'A quiet, mysterious fantasy
       { id: 'ashford', kind: 'location', name: 'Ashford', description: 'A ruined town beneath an intact bell tower.', locationId: null, ownerId: null, condition: 'Destroyed', knownBy: ['player', 'mara'] },
       { id: 'mara', kind: 'npc', name: 'The woman at the arch', description: 'Her name is Mara. She keeps watch over the ruins.', locationId: 'ashford', ownerId: null, condition: 'Watchful', knownBy: ['player', 'mara'] },
       { id: 'order', kind: 'faction', name: 'The Hollow Choir', description: 'A secretive order that destroyed Ashford by ringing the buried bell.', locationId: null, ownerId: null, condition: 'Active', knownBy: [] },
+      { id: 'tower', kind: 'location', name: 'The bell tower', description: 'The surviving bell tower in Ashford.', locationId: 'ashford', ownerId: null, condition: 'Intact', knownBy: ['player', 'mara'] },
+      { id: 'lantern', kind: 'item', name: 'Unlit lantern', description: 'The lantern held by the woman at the arch.', locationId: null, ownerId: 'mara', condition: 'Unlit', knownBy: ['player', 'mara'] },
       { id: 'journal', kind: 'item', name: 'Weathered notebook', description: 'An empty travel notebook.', locationId: null, ownerId: 'player', condition: 'Worn', knownBy: ['player'] }
     ],
     facts: [
       { id: 'ruin', key: 'ashford.destruction', text: 'Ashford was destroyed three days before your arrival. The bell tower survived.', subjects: ['ashford'], at: -3840, knownBy: ['player', 'mara'] },
       { id: 'cause', key: 'ashford.destruction.cause', text: 'The Hollow Choir destroyed Ashford by ringing a buried bell.', subjects: ['ashford', 'order'], at: -3840, knownBy: [] },
+      { id: 'arrival', key: 'player.arrival', text: 'You arrived in the rain. The woman at the arch wore a weathered blue coat and held an unlit lantern. She said that if you were looking for someone, you should start with their name.', subjects: ['player', 'mara', 'ashford', 'lantern'], at: 480, knownBy: ['player', 'mara'] },
       { id: 'ability', key: 'player.background', text: 'You are a traveler with a patient ear and an eye for overlooked details.', subjects: ['player'], at: 0, knownBy: ['player'] }
     ],
     claims: [], quests: [{ id: 'mystery', title: 'What remains of Ashford', description: 'Discover what destroyed the town, and whether anyone can still be helped.', status: 'active', knownBy: ['player'] }],
     rules: [{ id: 'memory', text: 'Magic can preserve a memory, but cannot change an event that has already happened.', knownBy: ['player'] }],
-    scheduled: [{ id: 'dusk', dueAt: 1080, description: 'At dusk, Mara leaves the exposed arch and takes shelter in the bell tower.', subjects: ['mara', 'ashford'], resolved: false }]
+    scheduled: [{ id: 'dusk', dueAt: 1080, description: 'At dusk, Mara leaves the exposed arch and takes shelter in the bell tower.', subjects: ['mara', 'tower'], resolved: false }]
   };
 }

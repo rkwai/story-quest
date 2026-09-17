@@ -23,3 +23,6 @@ Promote a known-good Vercel deployment or revert the bad application commit. Kee
 ## Verification record
 
 A production release is complete only with a successful provider deployment and an HTTP/browser check of its URL. Both plugins are connected, but their operational tools were not exposed in the implementation session. No live project or model credentials have yet been configured. Refresh discovery on the next turn and complete the provider steps. The offline scripted sample works without keys but is not a live DM.
+
+
+The first implementation was published to master (`b76f10a`) and GitHub CI passed. Vercel CLI fallback was attempted and returned `login_required`; it has no saved login or token in this workspace. A successful plugin connection is distinct from CLI write authorization. No production URL has been claimed or verified.

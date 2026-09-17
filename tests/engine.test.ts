@@ -67,6 +67,7 @@ test('all sample branches produce consistent persistent outcomes',()=>{
  for (const [i,input] of ['Ask the woman what happened','Examine the bell tower','Wait until dusk'].entries()) {
   const result=demoTurn(world,input,String(i)); assert.ok(result.turn); world=result.world;
  }
+ assert.equal(world.entities.find(e=>e.id==='mara')?.locationId,'tower');
  assert.equal(world.revision,3); assert.equal(world.claims.length,1); assert.equal(world.scheduled[0].resolved,true);
  assert.ok(!JSON.stringify(playerView(world)).includes('Hollow Choir'));
 });

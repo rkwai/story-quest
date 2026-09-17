@@ -14,7 +14,8 @@ export function demoTurn(world: World, input: string, id: string): { world: Worl
     const dusk = world.scheduled.find(e => e.id === 'dusk')!;
     if (dusk.resolved) return { world, clarification: 'The sample has reached dusk. Try speaking to the woman or examining the tower.' };
     elapsed = Math.max(0, dusk.dueAt - world.minute);
-    add('shelter', 'At dusk, the woman takes shelter inside the bell tower.', ['mara','ashford'], dusk.dueAt);
+    add('shelter', 'At dusk, the woman takes shelter inside the bell tower.', ['mara','tower'], dusk.dueAt);
+    operations.push({ op: 'update_entity', id: 'mara', field: 'locationId', value: 'tower' });
     operations.push({ op: 'resolve_event', id: 'dusk', factId: 'shelter' });
     interpretation = 'You wait in Ashford until dusk.';
     narration = 'The light drains from the archway. At last the woman closes her hand around the lantern’s handle and crosses to the bell tower.\n\nYou watch her disappear into its shelter. Ashford is quiet around you. The ruins have kept their silence all day; now the last of the daylight goes with her.';

@@ -6,7 +6,7 @@ import { playerView } from '@/engine/view';
 import { worldSchema, publicTurnSchema, type PlayerView, type PublicTurn } from '@/engine/types';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
-const SAMPLE_KEY = 'storyquest.sample.v1';
+const SAMPLE_KEY = 'storyquest.sample.v2';
 const campaignKey = (user: string) => `storyquest.campaign.${user}`;
 const messages: Record<string,string> = {
   MODEL_UNAVAILABLE: 'The storyteller is taking a moment. Your action has not been applied. Please try again.',

@@ -18,7 +18,8 @@ Updated: 2026-09-17. This file is the handoff across sessions. Checkboxes mean i
 - [x] Live DM proposal -> commit -> narration, with retry/fallback behavior.
 - [x] Private diagnostic traces and versioned prompts.
 - [x] Meaningful engine/database/phone-flow verification and production build.
-- [ ] Push master and verify production deployment.
+- [x] Push implementation to master; GitHub CI passed on b76f10a.
+- [ ] Verify hosted production deployment and real model turn.
 
 ## Phase 2 — Prove continuity
 
@@ -49,5 +50,7 @@ Read completed items and latest verification below. Continue the earliest incomp
 - Production dependency audit: no known vulnerabilities reported during this pass.
 - TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
 - Supabase hosted migration, email sign-in, actual model responses and Vercel live deployment still require verification in the connected accounts. Local database tests do not establish hosted access or deployment success.
+
+Vercel CLI 59.20.0 was also checked: it reports login_required. Plugin connection has not supplied CLI deployment authentication.
 
 Next action: discover the now-connected Vercel and Supabase tools, identify/create the StoryQuest projects, apply migration and environment settings, deploy master, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.
