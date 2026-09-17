@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { authenticate, checkDb, failure, readBody, trace } from '@/server/db';
 import { narrate } from '@/server/dm';
+import { ModelCallError } from '@/server/openrouter';
 import { EngineError } from '@/engine/types';
 export const maxDuration = 60;
 export async function POST(request: Request) {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json(answer.data);
   } catch (e) {
     if (active) {
-      await trace(active.campaign, active.turn, 'narration_failed', performance.now()-started, { code: e instanceof EngineError ? e.code : 'INVALID_RESPONSE' });
+      await trace(active.campaign, active.turn, 'narration_failed', performance.now()-started, { code: e instanceof EngineError ? e.code : 'INVALID_RESPONSE', ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}) });
       await authenticate(request).then(({ db }) => db.from('turns').update({ narration_lease_until: null }).eq('campaign_id', active!.campaign).eq('id', active!.turn)).catch(() => undefined);
     }
     return failure(e);

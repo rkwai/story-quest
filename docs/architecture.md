@@ -8,11 +8,13 @@ Next.js serves the mobile web app and authenticated orchestration routes on Verc
 flowchart TD
   UI[Mobile story interface] --> API[Authenticated turn route]
   API --> Context[Bounded context builder]
-  Context --> DM[LLM DM proposal]
+  Context --> DM[OpenRouter DM proposal]
   DM --> Engine[Validate and reduce]
   Engine --> DB[(Supabase atomic commit)]
+  DM -. Candidate review .-> Jev[TypeSafe Jev]
+  Jev -. Advisory only .-> Trace
   DB --> View[Character knowledge projection]
-  View --> Narrator[LLM narration]
+  View --> Narrator[OpenRouter narration]
   Narrator --> UI
   API --> Trace[(Private turn traces)]
 ```
@@ -31,7 +33,7 @@ Future scaling: move growing facts/events into indexed tables and retrieve candi
 2. Check `(campaign_id, turn_id)` before a model call; return the previous result on retry. A reused ID with a different input is rejected.
 3. Build bounded DM context: world seed and all applicable rules, player and scene entities, linked facts/claims, open quests, due events and a short recent outcome window. Log selected IDs and size. Fail closed when mandatory context cannot fit.
 4. The DM returns clarification or an attempted-action interpretation, elapsed time and typed operations. At most one proposal call in the first slice; invalid proposals return a retryable failure without mutation. Never silently repair history.
-5. Reduce on a clone. Reject invalid references, overwritten facts, invalid state transitions, unsupported operations and unresolved deadlines crossed by elapsed time.
+5. Reduce on a clone. Reject invalid references, overwritten facts, invalid state transitions, unsupported operations and unresolved deadlines crossed by elapsed time. When configured, one native Jev request reviews the candidate and bounded context for intent/continuity. Its private results are advisory; a 4-second timeout or failure never changes the engine outcome.
 6. Atomically lock/check snapshot revision and insert the accepted turn plus next snapshot. Concurrent stale proposals fail. Store the proposal, engine version and public outcome for replay. No external API call is inside the database transaction.
 7. Return committed public changes first. Narration is a separate authenticated request operating only on the committed public projection and outcome. It cannot change world state. The UI always has a deterministic fallback. Narration is persisted with bounded retries and its own lease.
 
@@ -45,13 +47,13 @@ Distant possibilities remain unmaterialized until relevant. They are constrained
 
 ## Knowledge boundary
 
-Authoritative state is not client-readable, even for the campaign owner, because it contains spoilers. Tables have RLS and no client grants/policies for snapshots or traces. The server returns a deliberately constructed player view. The secret-informed DM interpretation stays in the private proposal; public turn notes echo the player’s own attempt and list projected changes. Hidden facts, undiscovered entities, private rules and unresolved DM intentions never enter narration context. Known entities expose only identity/kind; descriptions, conditions, relationships and possessions are presented through known facts to avoid leaking changed offscreen attributes.
+Authoritative state is not client-readable, even for the campaign owner, because it contains spoilers. Tables have RLS and no client grants/policies for snapshots or traces. The server returns a deliberately constructed player view. The secret-informed DM interpretation and clarification text stay in private records; ambiguous turns return a fixed public-safe question. Public turn notes echo the player’s own attempt and list projected changes. Hidden facts, undiscovered entities, private rules and unresolved DM intentions never enter narration context. Known entities expose only identity/kind; descriptions, conditions, relationships and possessions are presented through known facts to avoid leaking changed offscreen attributes.
 
 The narration prompt may add sensory connective prose but must not invent consequential facts. This prompt is a constraint, not a formal proof. Story fidelity evaluations and an eventual independent narrative checker are required before claiming strong semantic guarantees.
 
 ## Cost and latency
 
-Default bounds: 2,000 input characters, 24,000 context characters, 20 operations, 720 in-story minutes, 1 proposal + 1 narration call on the normal path, with at most one explicit narration retry per accepted turn. No calls on inactivity. Provider token counts, model/version, prompt version, stage duration and selected context IDs are logged. Dollars are not fabricated: configure real model prices before deriving cost. TypeSafe is an optional shadow evaluation tool initially, never allowed to commit state.
+Default bounds: 2,000 input characters, 24,000 context characters, 20 operations, 720 in-story minutes, 1 proposal + 1 narration call on the normal path, with at most one explicit narration retry per accepted turn. No calls on inactivity. Provider token counts, model/version, prompt version, stage duration and selected context IDs are logged. OpenRouter-reported cost, served model/provider and generation IDs are recorded through a metadata allowlist; missing costs stay null. Raw provider errors and reasoning are excluded. TypeSafe adds at most one 4-second shadow call per proposal, with no retries. Its resolved model, finite probabilities and usage are logged privately; it cannot commit or veto state.
 
 Two sequential model stages are intentional: narration cannot precede commitment. A visible committed outcome prevents a narration delay from making the game appear lost. Later optimize with streaming narration and measured caching, not speculative world mutation.
 

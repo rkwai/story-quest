@@ -1,0 +1,103 @@
+import test, { type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import { propose, narrate } from '../src/server/dm';
+import { ModelCallError } from '../src/server/openrouter';
+import { seedWorld } from '../src/engine/seed';
+import { playerView } from '../src/engine/view';
+
+const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [] };
+function config(t: TestContext) {
+  const values = { OPENROUTER_API_KEY: 'test-private-key', STORY_MODEL: 'story/model', PROPOSAL_MODEL: 'planner/model', PROPOSAL_REASONING_EFFORT: 'low', STORY_REASONING_EFFORT: 'none' };
+  const previous = Object.fromEntries(Object.keys(values).map(k => [k, process.env[k]]));
+  Object.assign(process.env, values);
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+}
+function envelope(content: string, finish = 'stop') {
+  return { id: 'gen-fixture', model: 'resolved/model-version', provider: 'Example',
+    choices: [{ finish_reason: finish, message: { content, reasoning: 'PRIVATE_REASONING' } }],
+    usage: { prompt_tokens: 150, completion_tokens: 30, total_tokens: 180, cost: 0.001,
+      completion_tokens_details: { reasoning_tokens: 10 }, raw_prompt: 'PRIVATE_PROMPT', secret: 'test-private-key' } };
+}
+
+test('proposal routes through OpenRouter with strict schema and sanitized billable metadata', async t => {
+  config(t);
+  const fetch = t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
+    assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
+    assert.equal((options.headers as Record<string, string>).Authorization, 'Bearer test-private-key');
+    assert.ok(options.signal instanceof AbortSignal);
+    const body = JSON.parse(options.body as string);
+    assert.equal(body.model, 'planner/model');
+    assert.equal(body.max_tokens, 5000);
+    assert.equal(body.max_completion_tokens, undefined);
+    assert.deepEqual(body.provider, { require_parameters: true });
+    assert.deepEqual(body.reasoning, { effort: 'low', exclude: true });
+    assert.equal(body.response_format.json_schema.strict, true);
+    assert.match(body.messages[1].content, /hidden-cause/);
+    return Response.json(envelope(JSON.stringify(proposal)));
+  });
+  const result = await propose({ secret: 'hidden-cause' }, 'Wait briefly');
+  assert.deepEqual(result.data, proposal);
+  assert.equal(result.metrics.requestedModel, 'planner/model');
+  assert.equal(result.metrics.model, 'resolved/model-version');
+  assert.equal(result.metrics.providerGenerationId, 'gen-fixture');
+  assert.equal(result.metrics.usage && (result.metrics.usage as Record<string, unknown>).costUsd, 0.001);
+  assert.doesNotMatch(JSON.stringify(result.metrics), /PRIVATE_|test-private-key|hidden-cause/);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test('narration has a separate model, accepts prose and receives only player-visible knowledge', async t => {
+  config(t);
+  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    const body = JSON.parse(options.body as string);
+    assert.equal(body.model, 'story/model');
+    assert.equal(body.response_format, undefined);
+    assert.deepEqual(body.reasoning, { effort: 'none', exclude: true });
+    assert.doesNotMatch(body.messages[1].content, /Hollow Choir|buried bell/);
+    return Response.json(envelope('Rain threads the tower arch. The woman waits for your question.'));
+  });
+  const result = await narrate(playerView(seedWorld()), { id: 't1', input: 'Look around.', interpretation: 'Your attempt: Look around.', changes: [], narration: null, revision: 1 });
+  assert.match(result.data.narration, /^Rain threads/);
+});
+
+test('truncation and invalid output retain usage without returning provider details or retrying', async t => {
+  config(t);
+  const responses = [envelope('', 'length'), envelope('{invalid'), envelope(JSON.stringify({ ...proposal, elapsedMinutes: -1 })), { error: { message: 'PRIVATE_ERROR' } }];
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(responses.shift()));
+  for (const code of ['MODEL_INCOMPLETE', 'MODEL_INVALID_OUTPUT', 'MODEL_INVALID_OUTPUT', 'MODEL_UNAVAILABLE']) {
+    await assert.rejects(propose({}, 'Look'), error => {
+      assert.ok(error instanceof ModelCallError);
+      assert.equal(error.code, code);
+      assert.ok(error.metrics.generationId);
+      assert.doesNotMatch(JSON.stringify(error), /PRIVATE_|test-private-key/);
+      if (code !== 'MODEL_UNAVAILABLE') assert.equal((error.metrics.usage as Record<string, unknown>).costUsd, 0.001);
+      return true;
+    });
+  }
+  assert.equal(fetch.mock.callCount(), 4);
+});
+
+test('provider failures are sanitized and configuration never falls back to an old provider', async t => {
+  config(t);
+  const fetch = t.mock.method(globalThis, 'fetch', async () => new Response('PRIVATE_ERROR test-private-key', { status: 429 }));
+  await assert.rejects(propose({}, 'Look'), error => {
+    assert.ok(error instanceof ModelCallError);
+    assert.equal(error.code, 'MODEL_UNAVAILABLE');
+    assert.equal(error.metrics.httpStatus, 429);
+    assert.doesNotMatch(JSON.stringify(error), /PRIVATE_|test-private-key/);
+    return true;
+  });
+  delete process.env.OPENROUTER_API_KEY;
+  await assert.rejects(propose({}, 'Look'), /NOT_CONFIGURED/);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test('a non-reasoning storyteller works without a reasoning parameter', async t => {
+  config(t);
+  delete process.env.STORY_REASONING_EFFORT;
+  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    assert.equal(JSON.parse(options.body as string).reasoning, undefined);
+    return Response.json(envelope('Rain settles on the road.'));
+  });
+  const result = await narrate(playerView(seedWorld()), { id: 't2', input: 'Wait', interpretation: 'Wait', changes: [], narration: null, revision: 1 });
+  assert.equal(result.metrics.reasoningEffort, 'provider_default');
+});

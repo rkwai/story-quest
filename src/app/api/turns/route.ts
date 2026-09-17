@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { authenticate, checkDb, failure, readBody, trace } from '@/server/db';
 import { propose, PROMPT_VERSION } from '@/server/dm';
+import { ModelCallError } from '@/server/openrouter';
+import { reviewProposal } from '@/server/typesafe';
 import { buildContext } from '@/engine/context';
 import { applyProposal } from '@/engine/reducer';
 import { playerView, publicChanges } from '@/engine/view';
@@ -25,11 +27,14 @@ export async function POST(request: Request) {
     await trace(body.campaignId, body.turnId, 'proposal', answer.metrics.durationMs, answer.metrics);
     candidate = answer.data;
     const after = applyProposal(before, answer.data);
+    const review = await reviewProposal(context.state, body.input, answer.data);
+    await trace(body.campaignId, body.turnId, 'typesafe_review', review.durationMs, review);
     if (answer.data.kind === 'clarification') {
       const { error: releaseError } = await db.rpc('release_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId }); checkDb(releaseError);
-      await trace(body.campaignId, body.turnId, 'clarification', performance.now()-start, {});
+      await trace(body.campaignId, body.turnId, 'clarification', performance.now()-start, { proposal: answer.data });
       acquired = undefined;
-      return Response.json({ clarification: answer.data.clarification });
+      // The DM saw private facts. Its freeform question belongs in private traces only.
+      return Response.json({ clarification: 'Could you be more specific about what you want to do or ask, and who or what it involves?' });
     }
     const turn: PublicTurn = { id: body.turnId, input: body.input, interpretation: `Your attempt: ${body.input}`, changes: publicChanges(before, after), narration: null, revision: after.revision };
     const { data: committed, error: commitError } = await db.rpc('commit_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId, p_revision: before.revision, p_state: after, p_proposal: answer.data, p_result: turn, p_view: playerView(after), p_engine: ENGINE_VERSION });
@@ -39,7 +44,7 @@ export async function POST(request: Request) {
     return Response.json({ turn: committed, view: playerView(after) });
   } catch (e) {
     if (acquired) {
-      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null });
+      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}) });
       await authenticate(request).then(({ db }) => db.rpc('release_turn', { p_campaign: acquired!.campaign, p_owner: acquired!.owner, p_turn: acquired!.turn })).catch(() => undefined);
     }
     return failure(e);

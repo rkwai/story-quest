@@ -9,7 +9,7 @@ Rick explicitly authorizes production pushes for this repo. After meaningful ver
 1. Vercel and Supabase were connected successfully during implementation. Discover their tools and select/create the StoryQuest projects; do not ask to reconnect or guess an unrelated project.
 2. Import rkwai/story-quest in Vercel, repository root `.`, Next.js preset, Node 22, production branch master. The active app is at the root, not legacy/frontend.
 3. Create/link Supabase, apply the versioned migration, enable email sign-in and configure the exact production site URL and local redirect URL.
-4. Add `.env.example` values to Vercel. `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` are server-only. Choose `STORY_MODEL` explicitly for the connected API account. Leave TypeSafe off until evaluated.
+4. Add `.env.example` values to Vercel. `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` are server-only. Use the explicit model IDs in docs/models.md. TypeSafe runs only advisory shadow reviews until calibrated.
 5. Redeploy, test sign-in, create a campaign, perform a turn, reload, inspect private traces, and confirm hidden facts never appear in network responses.
 
 ## Git-triggered releases
@@ -41,11 +41,17 @@ The connected tools expose public keys but no server key retrieval, Supabase Aut
 | NEXT_PUBLIC_SUPABASE_URL | https://cpybqwezigwkhxldxwiv.supabase.co |
 | NEXT_PUBLIC_SUPABASE_ANON_KEY | Enabled publishable key from this project's API settings |
 | SUPABASE_SERVICE_ROLE_KEY | This project's server-only service-role key; never put it in chat or git |
-| OPENAI_API_KEY | Server-only OpenAI project key with billing enabled |
-| STORY_MODEL | Explicit model ID supported by that account, with Chat Completions JSON Schema |
+| OPENROUTER_API_KEY | Server-only OpenRouter key with credits |
+| STORY_MODEL | deepseek/deepseek-v4.1-flash (starter storyteller) |
+| PROPOSAL_MODEL | deepseek/deepseek-v4.1-flash (optional; defaults to STORY_MODEL; JSON Schema required) |
+| PROPOSAL_REASONING_EFFORT | low for the starter model |
+| STORY_REASONING_EFFORT | none for DeepSeek; low for GLM; omit for Cydonia |
+| TYPESAFE_API_KEY | Separate native TypeSafe key for advisory reviews |
+| TYPESAFE_MODEL | jev-latest |
+| TYPESAFE_MODE | shadow (or off to disable reviews) |
 
 In [Supabase Auth URL configuration](https://supabase.com/dashboard/project/cpybqwezigwkhxldxwiv/auth/url-configuration), set Site URL to https://story-quest-seven.vercel.app and register that exact redirect origin plus http://localhost:3000 for local testing. Confirm email provider is enabled. Default Supabase SMTP is limited to organization-team addresses; Rick can demo using his team email. Public signups need custom SMTP ([provider documentation](https://supabase.com/docs/guides/auth/auth-smtp)).
 
-After configuration, redeploy so public keys are included in the client build. Test sign-in, create campaign, commit a turn, complete narration, reload, inspect traces and confirm hidden facts remain server-only. The application stays in scripted-sample mode until all five values are present. Hosted auth and a real paid model turn remain unverified; TypeSafe is still optional.
+After configuration, redeploy so public keys are included in the client build. Test sign-in, create campaign, commit a turn, complete narration, reload, inspect traces and confirm hidden facts remain server-only. The application stays in scripted-sample mode until the three Supabase values plus OPENROUTER_API_KEY and STORY_MODEL are present. Hosted auth and a real paid model turn remain unverified; TypeSafe is optional for availability and cannot mutate or veto state; configured reviews are privately logged. OpenRouter currently lists Jev as coming soon, so keep its key separate.
 
 Package engines now pins Node 22.x, matching CI, because the initial Vercel deployment selected Node 24 from the former >=22 range.

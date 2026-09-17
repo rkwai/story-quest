@@ -1,0 +1,169 @@
+import test, { type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import type { Proposal } from '../src/engine/types';
+import {
+  inputModeAnswerSchema, reviewProposal, safeTypeSafeUsage,
+  TYPESAFE_PROMPT_VERSION, TYPESAFE_STATE_LIMIT, TYPESAFE_TIMEOUT_MS
+} from '../src/server/typesafe';
+
+const proposal: Proposal = { kind: 'action', interpretation: 'Investigate the ruins.', clarification: null, elapsedMinutes: 5, operations: [] };
+const privateContext = { facts: ['PRIVATE-WORLD-TRUTH'], rules: [] };
+
+function configure(t: TestContext, overrides: Record<string, string | undefined> = {}) {
+  const values: Record<string, string | undefined> = {
+    TYPESAFE_API_KEY: 'test-typesafe-key', TYPESAFE_MODEL: undefined, TYPESAFE_MODE: undefined,
+    TYPESAFE_BASE_URL: 'https://unexpected-provider.invalid', TYPESAFE_DEFAULT_MODEL: 'unexpected-model', TYPESAFE_LOG_LEVEL: 'debug',
+    ...overrides
+  };
+  const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+}
+
+function envelope() {
+  return {
+    model: 'jev-2026-09',
+    answers: {
+      inputMode: { type: 'choice', choice: 'action', confidence: 0.9, probabilities: { action: 0.9, dialogue: 0.05, question: 0.03, meta: 0.01, unclear: 0.01 } },
+      immutableHistoryConcern: { type: 'noul', noul: 0.02 },
+      worldRuleConcern: { type: 'noul', noul: 0.04 },
+      unjustifiedKnowledgeConcern: { type: 'noul', noul: 0.8 }
+    },
+    usage: { input_tokens: 345, output_tokens: 23 }
+  };
+}
+
+test('Jev shadow is skipped with no key or explicitly off and never makes a call', async t => {
+  configure(t, { TYPESAFE_API_KEY: undefined });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('unexpected network call'); });
+  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).status, 'skipped');
+  process.env.TYPESAFE_API_KEY = 'test-typesafe-key';
+  process.env.TYPESAFE_MODE = 'off';
+  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).status, 'skipped');
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('Jev uses one explicit native-model batch, strips private provider metadata, and disables SDK logs', async t => {
+  configure(t);
+  const logs = ['debug', 'info', 'warn', 'error'].map(method => t.mock.method(console, method as 'debug', () => undefined));
+  const payload = { ...envelope(), reasoning: 'PRIVATE-REASONING', prompt: 'PRIVATE-PROMPT', usage: { ...envelope().usage, reasoning: 'PRIVATE-USAGE-REASONING' } };
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url: string | URL | Request, init?: RequestInit) => {
+    assert.equal(url, 'https://api.typesafe.ai/v1/systemone');
+    assert.ok(init?.signal instanceof AbortSignal);
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.model, 'jev-latest');
+    assert.deepEqual(Object.keys(body.questions), ['inputMode', 'immutableHistoryConcern', 'worldRuleConcern', 'unjustifiedKnowledgeConcern']);
+    assert.deepEqual(JSON.parse(body.state), { context: privateContext, input: 'Look', proposal });
+    assert.equal(body.questions.inputMode.type, 'choice');
+    assert.equal(body.questions.immutableHistoryConcern.type, 'noul');
+    return Response.json(payload);
+  });
+  const original = structuredClone({ privateContext, proposal });
+  const result = await reviewProposal(privateContext, 'Look', proposal);
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.requestedModel, 'jev-latest');
+  assert.equal(result.model, 'jev-2026-09');
+  assert.equal(result.provider, 'typesafe');
+  assert.equal(result.promptVersion, TYPESAFE_PROMPT_VERSION);
+  assert.equal(result.answers?.inputMode.choice, 'action');
+  assert.deepEqual(result.answers?.unjustifiedKnowledgeConcern, { probability: 0.8 });
+  assert.deepEqual(result.usage, { input_tokens: 345, output_tokens: 23 });
+  assert.ok(Number.isFinite(result.durationMs));
+  assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+  assert.deepEqual({ privateContext, proposal }, original);
+  assert.ok(logs.every(log => log.mock.callCount() === 0));
+});
+
+test('configured Jev model is explicit and unsafe configuration or oversized context makes no call', async t => {
+  configure(t, { TYPESAFE_MODEL: 'jev-pinned-version' });
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url: string | URL | Request, init?: RequestInit) => {
+    assert.equal(JSON.parse(String(init?.body)).model, 'jev-pinned-version');
+    return Response.json(envelope());
+  });
+  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).requestedModel, 'jev-pinned-version');
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal((await reviewProposal('x'.repeat(TYPESAFE_STATE_LIMIT), 'Look', proposal)).status, 'invalid');
+  const cyclic: { self?: unknown } = {}; cyclic.self = cyclic;
+  assert.equal((await reviewProposal(cyclic, 'Look', proposal)).status, 'invalid');
+  process.env.TYPESAFE_MODEL = 'PRIVATE-SECRET\ninvalid';
+  const invalid = await reviewProposal(privateContext, 'Look', proposal);
+  assert.equal(invalid.status, 'invalid');
+  assert.ok(!JSON.stringify(invalid).includes('PRIVATE-'));
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test('invalid answers, probability keys, confidence and token counts are never treated as valid metadata', async t => {
+  configure(t);
+  let payload: unknown = envelope();
+  t.mock.method(globalThis, 'fetch', async () => Response.json(payload));
+  const malformed = [
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, choice: 'PRIVATE-UNEXPECTED-CHOICE' } },
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, confidence: 1.1 } },
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, confidence: Number.NaN } },
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, probabilities: { action: 1 } } },
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, probabilities: { ...envelope().answers.inputMode.probabilities, secret: 0 } } },
+    { ...envelope().answers, immutableHistoryConcern: { type: 'noul', noul: -0.1 } },
+    { ...envelope().answers, unjustifiedKnowledgeConcern: { type: 'noul', noul: Infinity } },
+    { ...envelope().answers, injectedReasoning: 'PRIVATE-REASONING' }
+  ];
+  for (const answers of malformed) {
+    payload = { ...envelope(), answers };
+    const result = await reviewProposal(privateContext, 'Look', proposal);
+    assert.equal(result.status, 'invalid');
+    assert.equal(result.answers, undefined);
+    assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+  }
+  assert.equal(inputModeAnswerSchema.safeParse({ ...envelope().answers.inputMode, confidence: NaN }).success, false);
+  assert.equal(safeTypeSafeUsage({ input_tokens: -1, output_tokens: 1 }), null);
+  assert.equal(safeTypeSafeUsage({ input_tokens: 1, output_tokens: Infinity }), null);
+  assert.equal(safeTypeSafeUsage({ input_tokens: 1.2, output_tokens: 1 }), null);
+  payload = { ...envelope(), model: { reasoning: 'PRIVATE-REASONING' }, usage: { input_tokens: -1, output_tokens: 1, secret: 'PRIVATE-KEY' } };
+  const result = await reviewProposal(privateContext, 'Look', proposal);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.model, undefined);
+  assert.equal(result.usage, null);
+  assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+});
+
+test('Jev provider failures are sanitized and retryable errors are never retried', async t => {
+  configure(t);
+  const logs = ['debug', 'info', 'warn', 'error'].map(method => t.mock.method(console, method as 'debug', () => undefined));
+  let scenario: 'http' | 'transport' = 'http';
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+    if (scenario === 'transport') throw new Error('PRIVATE-TRANSPORT-SECRET');
+    return Response.json({ error: { message: 'PRIVATE-PROVIDER-SECRET', prompt: 'PRIVATE-PROMPT' } }, { status: 503 });
+  });
+  for (const value of ['http', 'transport'] as const) {
+    scenario = value;
+    const result = await reviewProposal(privateContext, 'Look', proposal);
+    assert.equal(result.status, 'unavailable');
+    assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+  }
+  assert.equal(fetchMock.mock.callCount(), 2);
+  assert.ok(logs.every(log => log.mock.callCount() === 0));
+});
+
+test('Jev cancels a stalled native request at four seconds without retrying', async t => {
+  configure(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let aborted = false;
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => { aborted = true; reject(new Error('PRIVATE-TIMEOUT-DETAIL')); }, { once: true });
+  }));
+  const pending = reviewProposal(privateContext, 'Look', proposal);
+  t.mock.timers.tick(TYPESAFE_TIMEOUT_MS - 1);
+  assert.equal(aborted, false);
+  t.mock.timers.tick(1);
+  const result = await pending;
+  assert.equal(aborted, true);
+  assert.equal(result.status, 'unavailable');
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+});
