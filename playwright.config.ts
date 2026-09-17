@@ -1,0 +1,2 @@
+import { defineConfig, devices } from '@playwright/test';
+export default defineConfig({testDir:'./tests/ui',use:{baseURL:'http://127.0.0.1:3000',...devices['iPhone 13'],defaultBrowserType:'chromium',launchOptions:{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?['--no-sandbox','--disable-dev-shm-usage','--single-process']:[]}},webServer:{command:'npm run start',url:'http://127.0.0.1:3000',reuseExistingServer:!process.env.CI},reporter:'list'});

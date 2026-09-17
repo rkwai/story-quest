@@ -1,42 +1,34 @@
 {
-  "name": "story-quest-backend",
-  "version": "1.0.0",
-  "description": "A web-based D&D-inspired RPG with an LLM-powered Dungeon Master",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "start": "node dist/server.js",
-    "dev": "nodemon src/server.ts",
-    "build": "tsc",
-    "test": "jest",
-    "cucumber": "NODE_OPTIONS=\"--loader ts-node/esm\" cucumber-js",
-    "test:features": "NODE_OPTIONS=\"--loader ts-node/esm\" cucumber-js tests/features/**/*.feature --import tests/step_definitions/**/*.ts --import tests/support/**/*.ts",
-    "lint": "eslint . --ext .ts",
-    "seed": "ts-node src/db/seed.ts",
-    "backend": "cd backend && npm run dev",
-    "frontend": "cd frontend && npm start",
-    "dev:all": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "build:all": "cd backend && npm run build && cd ../frontend && npm run build",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  "name": "story-quest",
+  "version": "0.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [
-    "rpg",
-    "d&d",
-    "llm",
-    "ai",
-    "dungeon-master",
-    "game"
-  ],
-  "author": "",
-  "license": "MIT",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:ui": "playwright test",
+    "eval:typesafe": "node --env-file-if-exists=.env.local --import tsx scripts/eval-typesafe.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.116.0",
+    "@typesafe-ai/sdk": "0.6.0",
+    "next": "16.3.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "4.6.5"
+  },
   "devDependencies": {
-    "@cucumber/cucumber": "^10.0.1",
-    "@types/chai": "^4.3.6",
-    "@types/node": "^20.10.0",
-    "axios": "^1.6.2",
-    "chai": "^4.3.10",
-    "concurrently": "^8.2.2",
-    "ts-node": "^10.9.1",
-    "tsconfig-paths": "^4.2.0"
+    "@electric-sql/pglite": "^0.3.14",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
-} 
+}

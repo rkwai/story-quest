@@ -1,0 +1,23 @@
+import { test, expect } from '@playwright/test';
+test('phone sample persists choices and separates claims from world facts',async({page})=>{
+ await page.goto('/');
+ await expect(page.getByRole('heading',{name:'The Silence of Ashford'})).toBeVisible();
+ await page.screenshot({path:test.info().outputPath('phone.png'),fullPage:true});
+ await page.setViewportSize({width:1280,height:900});
+ await page.screenshot({path:test.info().outputPath('desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Ask the woman what happened'}).click();
+ await page.getByRole('button',{name:'Send action'}).click();
+ await expect(page.getByText('The woman at the arch introduces herself as Mara.')).toBeVisible();
+ await page.getByRole('button',{name:'Journal',exact:true}).click();
+ await expect(page.getByText('The woman at the arch · Unverified account')).toBeVisible();
+ await expect(page.getByText(/Hollow Choir/)).toHaveCount(0);
+ await page.reload();
+ await expect(page.getByText('The woman at the arch introduces herself as Mara.')).toBeVisible();
+ await page.getByRole('button',{name:'World',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'The world you know'})).toBeVisible();
+ await expect(page.getByText('Magic can preserve a memory, but cannot change an event that has already happened.')).toBeVisible();
+ await page.getByRole('button',{name:'Character',exact:true}).click();
+ await expect(page.getByText('Weathered notebook')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});

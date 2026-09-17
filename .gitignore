@@ -34,4 +34,12 @@ yarn-error.log*
 
 # Misc
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+.next/
+.vercel/
+*.tsbuildinfo
+test-results/
+playwright-report/
+.env.*
+!.env.example

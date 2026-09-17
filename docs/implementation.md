@@ -6,18 +6,18 @@ Updated: 2026-09-17. This file is the handoff across sessions. Checkboxes mean i
 
 - [x] Capture agreed experience, authority/knowledge boundaries and lazy world evolution.
 - [x] Rewrite README and add agent instructions, architecture, maintenance and deployment plans.
-- [ ] Preserve old app under legacy/ and establish the new build.
+- [x] Preserve old app under legacy/ and establish the new build.
 
 ## Phase 1 — Playable foundation (current)
 
-- [ ] Mobile Story, Character, Journal and World views.
-- [ ] Explicit scripted sample with browser persistence and recovery.
-- [ ] Typed engine operations; immutable facts; knowledge/claims; deadline resolution; replay.
-- [ ] Bounded context retrieval and explicit semantic limitations.
-- [ ] Supabase auth, owner checks, private state, turn leases and atomic versioned commits.
-- [ ] Live DM proposal -> commit -> narration, with retry/fallback behavior.
-- [ ] Private diagnostic traces and versioned prompts.
-- [ ] Meaningful engine/database/phone-flow verification and production build.
+- [x] Mobile Story, Character, Journal and World views.
+- [x] Explicit scripted sample with browser persistence and recovery.
+- [x] Typed engine operations; immutable facts; knowledge/claims; deadline resolution; replay.
+- [x] Bounded context retrieval and explicit semantic limitations.
+- [x] Supabase auth, owner checks, private state, turn leases and atomic versioned commits.
+- [x] Live DM proposal -> commit -> narration, with retry/fallback behavior.
+- [x] Private diagnostic traces and versioned prompts.
+- [x] Meaningful engine/database/phone-flow verification and production build.
 - [ ] Push master and verify production deployment.
 
 ## Phase 2 — Prove continuity
@@ -34,8 +34,20 @@ Stream narration, replay UI for operators, player correction reports tied to tur
 
 ## Deployment access
 
-Initial inspection: repository accessible; no Vercel/Supabase project configuration or credentials in this workspace. Both plugins were suggested. Live deployment and provider calls must remain marked unverified until accounts are connected and configuration is set. A push to master is not evidence of a successful Vercel deployment.
+Initial inspection: repository accessible; no Vercel/Supabase project configuration or credentials in this workspace. Both plugins were subsequently connected successfully by Rick, and installed status was verified. Their operational tools were not exposed in the active session (only GitHub and plugin-management tools were callable). Do not ask Rick to reconnect them. Refresh tool discovery in the next turn and use the connected providers. Live deployment and provider calls remain unverified until projects and model configuration are applied. A push to master is not evidence of a successful Vercel deployment.
 
 ## Next session
 
 Read completed items and latest verification below. Continue the earliest incomplete phase, release verified work to production automatically, and report actual blockers precisely.
+
+
+## Verification — first foundation slice
+
+- TypeScript check and Next.js production build pass.
+- 11 engine/PostgreSQL tests pass. The migration is executed against PGlite PostgreSQL with Supabase-like roles, including service_role execution, owner checks, secret isolation, immutable accepted turns, version checks, retry idempotency and narration leases.
+- Phone browser smoke passes: action -> discovery -> claim labeling -> reload persistence -> World/Character navigation; no horizontal overflow. Initial phone and desktop screens visually inspected.
+- Production dependency audit: no known vulnerabilities reported during this pass.
+- TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
+- Supabase hosted migration, email sign-in, actual model responses and Vercel live deployment still require verification in the connected accounts. Local database tests do not establish hosted access or deployment success.
+
+Next action: discover the now-connected Vercel and Supabase tools, identify/create the StoryQuest projects, apply migration and environment settings, deploy master, then run a real authenticated turn and inspect its traces. Set an OpenAI API key and explicit structured-output-compatible STORY_MODEL; use the user's TypeSafe key only for the opt-in probe until accuracy is measured.

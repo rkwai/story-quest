@@ -1,0 +1,22 @@
+import type { World } from './types';
+export const OPENING = 'At the edge of Ashford, rain settles into streets that no longer have houses. The town is gone. Its bell tower still stands.\n\nA woman in a weathered blue coat waits beneath the arch, turning an unlit lantern in her hands. She looks up as you approach.\n\n“If you came looking for someone,” she says, “you should start with their name.”';
+export function seedWorld(name = 'Rowan', premise = 'A quiet, mysterious fantasy world where old promises carry weight. Discover what happened to Ashford.'): World {
+  return {
+    schemaVersion: 1, revision: 0, title: 'The Silence of Ashford', premise, playerId: 'player', minute: 480,
+    entities: [
+      { id: 'player', kind: 'character', name, description: 'A traveler who notices what others overlook.', locationId: 'ashford', ownerId: null, condition: 'Steady', knownBy: ['player'] },
+      { id: 'ashford', kind: 'location', name: 'Ashford', description: 'A ruined town beneath an intact bell tower.', locationId: null, ownerId: null, condition: 'Destroyed', knownBy: ['player', 'mara'] },
+      { id: 'mara', kind: 'npc', name: 'The woman at the arch', description: 'Her name is Mara. She keeps watch over the ruins.', locationId: 'ashford', ownerId: null, condition: 'Watchful', knownBy: ['player', 'mara'] },
+      { id: 'order', kind: 'faction', name: 'The Hollow Choir', description: 'A secretive order that destroyed Ashford by ringing the buried bell.', locationId: null, ownerId: null, condition: 'Active', knownBy: [] },
+      { id: 'journal', kind: 'item', name: 'Weathered notebook', description: 'An empty travel notebook.', locationId: null, ownerId: 'player', condition: 'Worn', knownBy: ['player'] }
+    ],
+    facts: [
+      { id: 'ruin', key: 'ashford.destruction', text: 'Ashford was destroyed three days before your arrival. The bell tower survived.', subjects: ['ashford'], at: -3840, knownBy: ['player', 'mara'] },
+      { id: 'cause', key: 'ashford.destruction.cause', text: 'The Hollow Choir destroyed Ashford by ringing a buried bell.', subjects: ['ashford', 'order'], at: -3840, knownBy: [] },
+      { id: 'ability', key: 'player.background', text: 'You are a traveler with a patient ear and an eye for overlooked details.', subjects: ['player'], at: 0, knownBy: ['player'] }
+    ],
+    claims: [], quests: [{ id: 'mystery', title: 'What remains of Ashford', description: 'Discover what destroyed the town, and whether anyone can still be helped.', status: 'active', knownBy: ['player'] }],
+    rules: [{ id: 'memory', text: 'Magic can preserve a memory, but cannot change an event that has already happened.', knownBy: ['player'] }],
+    scheduled: [{ id: 'dusk', dueAt: 1080, description: 'At dusk, Mara leaves the exposed arch and takes shelter in the bell tower.', subjects: ['mara', 'ashford'], resolved: false }]
+  };
+}

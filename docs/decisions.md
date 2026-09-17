@@ -28,3 +28,5 @@ Primary references:
 - [Supabase email sign-in](https://supabase.com/docs/guides/auth/auth-email-passwordless)
 - [OpenAI structured output contract](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [Next.js documentation](https://nextjs.org/docs)
+
+A first opt-in shadow probe is included: `npm run eval:typesafe` with `TYPESAFE_API_KEY`. It batches eight labeled input-mode questions in one call and prints predictions, confidence and elapsed time. It does not exercise live game state, prove calibration, or establish production reliability; expand the dataset before using this to choose a provider. It never mutates campaigns.

@@ -4,7 +4,7 @@
 
 Accepted turns are the campaign history: input, interpretation, operations, revision, elapsed story time, public outcome and engine version. Keep them for the life of the campaign so the reducer can replay from the seed. Never rewrite an old proposal when changing engine behavior; version reducers and migrate explicitly.
 
-Private traces explain each attempt: trace ID, campaign/turn ID, stage, model, prompt/engine version, duration, actual token usage, context entity/fact IDs, context size, validation failure code, and commit/narration status. Failed attempts must also produce traces. Do not store hidden reasoning, secrets, request headers or raw prompts in console logs. Provider errors should be sanitized. Input and accepted operations already live in private gameplay records; no need to duplicate them in every trace.
+Private traces explain each attempt: trace ID, campaign/turn ID, stage, model, prompt/engine version, duration, actual token usage, context entity/fact IDs, context size, validation failure code, and commit/narration status. Failed attempts after reservation also produce traces. A structurally valid but rejected candidate is stored privately with its failure code; malformed raw provider output is not retained. Do not store hidden reasoning, secrets, request headers or raw prompts in console logs. Provider errors should be sanitized. Input and accepted operations already live in private gameplay records; no need to duplicate them in every trace.
 
 No public operator endpoint in the first slice. Inspect traces with privileged Supabase SQL. They must never appear in player APIs or client bundles.
 

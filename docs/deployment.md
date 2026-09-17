@@ -6,7 +6,7 @@ Rick explicitly authorizes production pushes for this repo. After meaningful ver
 
 ## First connection
 
-1. Connect Vercel and Supabase accounts to the workspace. Select/create the StoryQuest projects once account access exists; do not guess an unrelated project.
+1. Vercel and Supabase were connected successfully during implementation. Discover their tools and select/create the StoryQuest projects; do not ask to reconnect or guess an unrelated project.
 2. Import rkwai/story-quest in Vercel, repository root `.`, Next.js preset, Node 22, production branch master. The active app is at the root, not legacy/frontend.
 3. Create/link Supabase, apply the versioned migration, enable email sign-in and configure the exact production site URL and local redirect URL.
 4. Add `.env.example` values to Vercel. `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` are server-only. Choose `STORY_MODEL` explicitly for the connected API account. Leave TypeSafe off until evaluated.
@@ -22,4 +22,4 @@ Promote a known-good Vercel deployment or revert the bad application commit. Kee
 
 ## Verification record
 
-A production release is complete only with a successful provider deployment and an HTTP/browser check of its URL. No provider credentials were present at initial inspection; connection is required before this can be verified. The offline scripted sample works without keys but is not a live DM.
+A production release is complete only with a successful provider deployment and an HTTP/browser check of its URL. Both plugins are connected, but their operational tools were not exposed in the implementation session. No live project or model credentials have yet been configured. Refresh discovery on the next turn and complete the provider steps. The offline scripted sample works without keys but is not a live DM.
