@@ -11,6 +11,7 @@ The LLM is the DM and evolves a seeded, data-driven world. Record consequences b
 - Implement small complete slices. Update docs/implementation.md with actual outcomes and next steps.
 - Rick explicitly says **always push to production for this repo**. After verification, commit and push master, deploy Vercel, check the live result, and continue authorized work. Routine release approval is already given.
 - Never force-push, delete user data, expose secrets, or substitute a different provider to bypass missing access.
+- Rick wants the QA account retained for iteration. Reset campaigns by archiving a run and starting from its stored seed; preserve old history/traces. Paid playtests are explicitly opt-in, claimed once by a durable run UUID, and never part of normal builds.
 - Keep legacy/ for reference only. Active code is src/ and supabase/.
 - Run npm run check, npm test, and npm run build. Check phone-sized UI when changing the experience.
 - Check provider access early. If deployment is blocked, finish code and push first, then identify the exact connection/configuration needed.

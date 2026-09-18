@@ -12,7 +12,7 @@ Character shows identity, condition, abilities, carried items and known relation
 
 ## Starting a campaign
 
-First slice: a seeded mystery at Ashford with a player-named character. Live mode accepts high-level premise and lore; seed facts constrain the opening. Broader AI-authored onboarding and campaign selection are tracked in the roadmap. A separate browser-saved sample demonstrates mechanics without paid calls. It is visibly labeled scripted.
+First slice: a seeded mystery at Ashford with a player-named character. Live mode accepts high-level premise and lore; seed facts constrain the opening. Broader AI-authored onboarding is tracked in the roadmap. Your adventures lists active and archived runs. Reset adventure starts again from the original seed on the same account; prior history is retained as a read-only archive. A separate browser-saved sample demonstrates mechanics without paid calls. It is visibly labeled scripted.
 
 ## A turn
 

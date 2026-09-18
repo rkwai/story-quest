@@ -17,7 +17,7 @@ export async function authenticate(request: Request) {
 }
 export function checkDb(error: { message: string } | null) {
   if (!error) return;
-  const code = ['NOT_FOUND','TURN_ID_REUSED','TURN_BUSY','STALE_REVISION','RATE_LIMIT','DAILY_LIMIT','LEASE_EXPIRED','NARRATION_BUSY','NARRATION_LIMIT','CAMPAIGN_LIMIT'].find(c => error.message.includes(c));
+  const code = ['NOT_FOUND','TURN_ID_REUSED','RESET_ID_REUSED','CAMPAIGN_ARCHIVED','TURN_BUSY','STALE_REVISION','RATE_LIMIT','DAILY_LIMIT','LEASE_EXPIRED','NARRATION_BUSY','NARRATION_LIMIT','CAMPAIGN_LIMIT'].find(c => error.message.includes(c));
   throw new EngineError(code ?? 'PERSISTENCE_FAILED');
 }
 export async function trace(campaign: string, turn: string, stage: string, duration: number, details: Record<string, unknown>) {
@@ -28,7 +28,7 @@ export async function trace(campaign: string, turn: string, stage: string, durat
 }
 export function failure(error: unknown) {
   const code = error instanceof EngineError ? error.code : 'INVALID_REQUEST';
-  const status = code === 'UNAUTHORIZED' ? 401 : code === 'NOT_FOUND' ? 404 : code === 'NOT_CONFIGURED' ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY'].includes(code) ? 409 : 400;
+  const status = code === 'UNAUTHORIZED' ? 401 : code === 'NOT_FOUND' ? 404 : code === 'NOT_CONFIGURED' ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY','CAMPAIGN_ARCHIVED','RESET_ID_REUSED'].includes(code) ? 409 : 400;
   return Response.json({ error: code }, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 export async function readBody(request: Request) {

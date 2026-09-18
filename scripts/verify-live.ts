@@ -1,5 +1,6 @@
 /** Explicitly opt-in production smoke test. Never log credentials, links, or story data. */
 import { randomBytes, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { publicSupabaseConfig } from '../src/lib/supabase-public';
@@ -8,9 +9,10 @@ import { serverSupabaseConfig } from '../src/server/config';
 const SITE = 'https://story-quest-seven.vercel.app';
 const PROJECT = 'https://cpybqwezigwkhxldxwiv.supabase.co';
 const WORK_BUDGET_MS = 150000;
-const CLEANUP_BUDGET_MS = 25000;
+const DIAGNOSTIC_BUDGET_MS = 25000;
+const QA_EMAIL = 'storyquest-qa@example.com';
 const INPUT = 'I examine the ruined archway without moving or speaking.';
-const errorCodes = new Set(['NOT_CONFIGURED', 'UNAUTHORIZED', 'NOT_FOUND', 'TURN_ID_REUSED', 'TURN_BUSY', 'STALE_REVISION', 'RATE_LIMIT', 'DAILY_LIMIT', 'LEASE_EXPIRED', 'NARRATION_BUSY', 'NARRATION_LIMIT', 'CAMPAIGN_LIMIT', 'PERSISTENCE_FAILED', 'INVALID_REQUEST', 'INVALID_PROPOSAL', 'INVALID_RESPONSE', 'MODEL_UNAVAILABLE', 'MODEL_INCOMPLETE', 'MODEL_INVALID_OUTPUT', 'CONTEXT_BUDGET_EXCEEDED']);
+const errorCodes = new Set(['NOT_CONFIGURED', 'UNAUTHORIZED', 'NOT_FOUND', 'TURN_ID_REUSED', 'TURN_BUSY', 'STALE_REVISION', 'RATE_LIMIT', 'DAILY_LIMIT', 'LEASE_EXPIRED', 'NARRATION_BUSY', 'NARRATION_LIMIT', 'CAMPAIGN_LIMIT', 'CAMPAIGN_ARCHIVED', 'PERSISTENCE_FAILED', 'INVALID_REQUEST', 'INVALID_PROPOSAL', 'INVALID_RESPONSE', 'MODEL_UNAVAILABLE', 'MODEL_INCOMPLETE', 'MODEL_INVALID_OUTPUT', 'CONTEXT_BUDGET_EXCEEDED']);
 for (const code of ['INVALID_CLARIFICATION', 'ACTION_HAS_CLARIFICATION', 'UNKNOWN_ENTITY', 'DUPLICATE_ID', 'INVALID_OBSERVER', 'INVALID_CONDITION', 'ESTABLISHED_FACT', 'FUTURE_FACT', 'UNKNOWN_FACT', 'INVALID_NEW_QUEST', 'UNKNOWN_QUEST', 'QUEST_ALREADY_RESOLVED', 'INVALID_DEADLINE', 'UNKNOWN_PENDING_EVENT', 'EVENT_WITHOUT_OUTCOME', 'INVALID_EVENT_OUTCOME', 'INVALID_LOCATION', 'INVALID_OWNER', 'ITEM_TWO_LOCATIONS', 'INVALID_SPEAKER', 'UNRESOLVED_DEADLINE', 'INVALID_PLAYER']) errorCodes.add(code);
 const stages = new Set(['context', 'proposal', 'typesafe_review', 'clarification', 'committed', 'failed', 'narration', 'narration_failed']);
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -19,7 +21,12 @@ const check: (condition: unknown, code: string) => asserts condition = (conditio
 const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 const label = (value: unknown) => typeof value === 'string' && /^~?[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/.test(value) ? value : null;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const log = (phase: string, status: string, extra: Record<string, unknown> = {}) => console.log(JSON.stringify({ verification: 'live', phase, status, ...extra }));
+const reports: Record<string, unknown>[] = [];
+const log = (phase: string, status: string, extra: Record<string, unknown> = {}) => {
+  const entry = { verification: 'live', phase, status, ...extra };
+  reports.push(entry);
+  console.log(JSON.stringify(entry));
+};
 
 function safeTrace(row: Record<string, unknown>) {
   const details = record(row.details);
@@ -48,9 +55,11 @@ function safeTrace(row: Record<string, unknown>) {
 
 async function main() {
   if (!process.argv.includes('--execute')) {
-    log('opt_in', 'skipped', { reason: 'Pass --execute to run one paid production turn with a temporary QA account.' });
+    log('opt_in', 'skipped', { reason: 'Pass --execute --run-id=<UUID> to run one paid production turn with the retained QA account.' });
     return;
   }
+  const runId = process.argv.find(arg => arg.startsWith('--run-id='))?.slice('--run-id='.length);
+  check(z.uuid().safeParse(runId).success, 'RUN_ID_REQUIRED');
   const publicConfig = publicSupabaseConfig(), serverConfig = serverSupabaseConfig();
   check(publicConfig.url === PROJECT && serverConfig.url === PROJECT, 'PROJECT_MISMATCH');
   check(publicConfig.key && serverConfig.key && process.env.OPENROUTER_API_KEY?.trim(), 'NOT_CONFIGURED');
@@ -63,7 +72,7 @@ async function main() {
   let campaignId: string | undefined;
   let bearer: string | undefined;
   const turnId = randomUUID();
-  const email = `storyquest-qa-${randomUUID()}@example.com`;
+  const email = QA_EMAIL;
   const password = randomBytes(32).toString('base64url');
 
   function projectFetch(signal: AbortSignal, requestTimeout = 15000) {
@@ -90,21 +99,35 @@ async function main() {
     }
     return payload;
   }
-  const campaignSchema = z.object({ id: z.uuid(), view: z.object({ revision: z.number().int().nonnegative() }), turns: z.array(z.object({ id: z.string(), revision: z.number().int(), narration: z.string().nullable() })) });
+  const campaignSchema = z.object({ id: z.uuid(), view: z.looseObject({ revision: z.number().int().nonnegative() }), turns: z.array(z.object({ id: z.string(), revision: z.number().int(), narration: z.string().nullable() })) });
   let verifiedFlow = false;
+  let claimed = false;
+  let resetVerified = false;
   try {
+    // A durable unique claim prevents this exact opt-in from spending again on any rebuild.
+    const claim = await admin.from('verification_runs').insert({ id: runId, status: 'running' });
+    if (claim.error?.code === '23505') { log('one_time_guard', 'skipped', { reason: 'This run ID has already been used.' }); return; }
+    check(!claim.error, 'RUN_CLAIM_FAILED');
+    claimed = true;
+    log('one_time_guard', 'passed');
     const health = record(await hosted('/api/health'));
     check(health.status === 'configured', 'HOSTED_NOT_CONFIGURED');
     log(phase, 'passed');
 
     phase = 'qa_identity';
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { storyquest_qa: true } });
-    check(!created.error && created.data.user?.email === email && z.uuid().safeParse(created.data.user?.id).success, 'QA_CREATE_FAILED');
-    qaUserId = created.data.user.id;
-    const signedIn = await publicClient.auth.signInWithPassword({ email, password });
+    check(!created.error || created.error.code === 'email_exists', 'QA_CREATE_FAILED');
+    const sessionLink = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: SITE } });
+    const qa = sessionLink.data.user;
+    check(!sessionLink.error && qa?.email === email && qa.app_metadata.storyquest_qa === true && z.uuid().safeParse(qa.id).success, 'QA_IDENTITY_MISMATCH');
+    qaUserId = qa.id;
+    // Verify the generated OTP directly for a reusable session; no email or password is logged/stored.
+    const signedIn = await publicClient.auth.verifyOtp({ token_hash: sessionLink.data.properties.hashed_token, type: 'email' });
     check(!signedIn.error && signedIn.data.user?.id === qaUserId && signedIn.data.session?.access_token, 'QA_SIGNIN_FAILED');
     bearer = signedIn.data.session.access_token;
-    log(phase, 'passed');
+    const identified = await admin.from('verification_runs').update({ qa_user_id: qaUserId }).eq('id', runId);
+    check(!identified.error, 'RUN_RECORD_FAILED');
+    log(phase, 'passed', { retained: true, reused: !!created.error });
 
     phase = 'auth_redirect';
     try {
@@ -132,12 +155,18 @@ async function main() {
     } catch (error) {
       failed = true;
       log(phase, 'failed', { code: error instanceof SmokeFailure ? error.code : 'AUTH_REDIRECT_CHECK_FAILED', authRedirect: false });
-      // Continue the same QA run with the already verified password session.
+      // Continue the same QA run with the already verified QA session.
     }
 
     phase = 'campaign';
-    const campaign = campaignSchema.parse(await hosted('/api/campaigns', { name: 'QA Traveler', premise: 'A quiet fantasy world where established history remains true. A traveler arrives at the ruined town of Ashford.' }));
+    const listed = z.object({ campaigns: z.array(z.object({ id: z.uuid(), archived_at: z.string().nullable() })) }).parse(await hosted('/api/campaigns'));
+    const active = listed.campaigns.find(c => c.archived_at === null);
+    const campaign = campaignSchema.parse(active
+      ? await hosted('/api/campaigns/reset', { campaignId: active.id, resetId: randomUUID() })
+      : await hosted('/api/campaigns', { name: 'QA Traveler', premise: 'A quiet fantasy world where established history remains true. A traveler arrives at the ruined town of Ashford.' }));
     campaignId = campaign.id;
+    const attached = await admin.from('verification_runs').update({ campaign_id: campaignId }).eq('id', runId);
+    check(!attached.error, 'RUN_RECORD_FAILED');
     check(campaign.view.revision === 0 && campaign.turns.length === 0, 'CAMPAIGN_INITIAL_STATE_INVALID');
     log(phase, 'passed');
     const body = { campaignId, turnId, revision: campaign.view.revision, input: INPUT };
@@ -157,7 +186,10 @@ async function main() {
     phase = 'reload_and_replay';
     const beforeReplay = campaignSchema.parse(await hosted(`/api/campaigns?id=${campaignId}`));
     check(beforeReplay.view.revision === 1 && beforeReplay.turns.length === 1 && beforeReplay.turns[0].id === turnId && beforeReplay.turns[0].narration === narration.narration, 'RELOAD_INVALID');
-    const replayed = record(await hosted('/api/turns', body));
+    // Exercise database replay without another paid-capable HTTP turn request.
+    const replay = await admin.rpc('reserve_turn', { p_campaign: campaignId, p_owner: qaUserId, p_turn: turnId, p_input: INPUT, p_revision: 0 });
+    check(!replay.error, 'REPLAY_INVALID');
+    const replayed = record(replay.data);
     check(replayed.replayed === true && record(replayed.turn).id === turnId && record(replayed.turn).revision === 1, 'REPLAY_INVALID');
     const afterReplay = campaignSchema.parse(await hosted(`/api/campaigns?id=${campaignId}`));
     check(afterReplay.view.revision === 1 && afterReplay.turns.length === 1 && afterReplay.turns[0].narration === narration.narration, 'REPLAY_MUTATED_WORLD');
@@ -172,19 +204,35 @@ async function main() {
     }
     log(phase, 'passed');
     verifiedFlow = true;
+
+    phase = 'reset';
+    const resetId = randomUUID();
+    const resetBody = { campaignId, resetId };
+    const fresh = campaignSchema.parse(await hosted('/api/campaigns/reset', resetBody));
+    check(fresh.id !== campaignId && fresh.view.revision === 0 && fresh.turns.length === 0 && isDeepStrictEqual(fresh.view, campaign.view), 'RESET_STATE_INVALID');
+    const resetReplay = record(await hosted('/api/campaigns/reset', resetBody));
+    check(resetReplay.id === fresh.id && resetReplay.replayed === true, 'RESET_REPLAY_INVALID');
+    const old = record(await hosted(`/api/campaigns?id=${campaignId}`));
+    check(old.archived === true && record(old.view).revision === 1 && campaignSchema.parse(old).turns[0]?.narration === narration.narration, 'RESET_HISTORY_CHANGED');
+    const archivedAttempt = await admin.rpc('reserve_turn', { p_campaign: campaignId, p_owner: qaUserId, p_turn: randomUUID(), p_input: INPUT, p_revision: 1 });
+    check(archivedAttempt.error?.message.includes('CAMPAIGN_ARCHIVED'), 'ARCHIVED_CAMPAIGN_NOT_PROTECTED');
+    const resetReload = campaignSchema.parse(await hosted(`/api/campaigns?id=${fresh.id}`));
+    check(resetReload.view.revision === 0 && resetReload.turns.length === 0, 'RESET_RELOAD_INVALID');
+    resetVerified = true;
+    log(phase, 'passed', { freshRevision: 0, preservedRevision: 1, replayed: true });
   } catch (error) {
     failed = true;
     log(phase, 'failed', { code: error instanceof SmokeFailure ? error.code : work.signal.aborted ? 'WORK_BUDGET_EXCEEDED' : 'VERIFICATION_FAILED' });
   } finally {
     clearTimeout(workTimer);
     work.abort();
-    const cleanup = new AbortController();
-    const cleanupTimer = setTimeout(() => cleanup.abort(), CLEANUP_BUDGET_MS);
-    const cleanupAdmin: SupabaseClient = createClient(PROJECT, serverConfig.key, { auth: authOptions, global: { fetch: projectFetch(cleanup.signal, 8000) } });
+    const diagnostic = new AbortController();
+    const diagnosticTimer = setTimeout(() => diagnostic.abort(), DIAGNOSTIC_BUDGET_MS);
+    const diagnosticAdmin: SupabaseClient = createClient(PROJECT, serverConfig.key, { auth: authOptions, global: { fetch: projectFetch(diagnostic.signal, 8000) } });
     try {
       if (campaignId) {
         try {
-          const traces = await cleanupAdmin.from('turn_traces').select('stage,duration_ms,details').eq('campaign_id', campaignId).eq('turn_id', turnId).order('created_at').limit(20);
+          const traces = await diagnosticAdmin.from('turn_traces').select('stage,duration_ms,details').eq('campaign_id', campaignId).eq('turn_id', turnId).order('created_at').limit(20);
           check(!traces.error && Array.isArray(traces.data), 'TRACE_READ_FAILED');
           const metrics = traces.data.map(row => safeTrace(row));
           log('provider_traces', 'captured', { metrics });
@@ -202,24 +250,17 @@ async function main() {
           log('provider_traces', 'failed', { code: error instanceof SmokeFailure ? error.code : 'TRACE_VERIFICATION_FAILED' });
         }
       }
-      if (qaUserId) {
-        try {
-          // Delete only the ID returned when this run created its own QA account.
-          const removed = await cleanupAdmin.auth.admin.deleteUser(qaUserId);
-          check(!removed.error, 'QA_CLEANUP_FAILED');
-          const remaining = await cleanupAdmin.from('campaigns').select('id', { count: 'exact', head: true }).eq('owner_id', qaUserId);
-          check(!remaining.error && remaining.count === 0, 'QA_CASCADE_CHECK_FAILED');
-          log('cleanup', 'passed');
-        } catch {
-          failed = true;
-          log('cleanup', 'failed', { code: 'QA_CLEANUP_FAILED' });
-        }
-      } else {
-        log('cleanup', 'not_created');
+      if (qaUserId) log('retention', 'passed', { accountRetained: true, historyRetained: true });
+      if (claimed) {
+        log('complete', failed ? 'failed' : 'passed', { authRedirect, verifiedFlow, resetVerified });
+        const recorded = await diagnosticAdmin.from('verification_runs').update({
+          status: failed ? 'failed' : 'passed', qa_user_id: qaUserId ?? null, campaign_id: campaignId ?? null,
+          finished_at: new Date().toISOString(), result: { authRedirect, verifiedFlow, resetVerified, reports }
+        }).eq('id', runId);
+        if (recorded.error) { failed = true; log('run_record', 'failed', { code: 'RUN_RECORD_FAILED' }); }
       }
-    } finally { clearTimeout(cleanupTimer); cleanup.abort(); }
+    } finally { clearTimeout(diagnosticTimer); diagnostic.abort(); }
   }
-  log('complete', failed ? 'failed' : 'passed', { authRedirect, verifiedFlow });
   if (failed) process.exitCode = 1;
 }
 
