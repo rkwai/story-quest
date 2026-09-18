@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { EngineError } from '@/engine/types';
+import { serverSupabaseConfig } from '@/server/config';
 
 export function database() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url, key } = serverSupabaseConfig();
   if (!url || !key) throw new EngineError('NOT_CONFIGURED');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }

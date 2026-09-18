@@ -13,7 +13,7 @@ Schema compliance and model confidence do not prove semantic consistency. The de
 
 ## Initial configuration
 
-Set these server-side variables in Vercel, then redeploy:
+Add the OpenRouter key in Vercel, then redeploy. The other values below are built-in defaults and optional overrides:
 
 ```dotenv
 OPENROUTER_API_KEY=<secret>
@@ -29,6 +29,8 @@ TYPESAFE_MODE=shadow
 `TYPESAFE_MODEL` is optional and defaults to `~typesafe/jev-latest`. The same `OPENROUTER_API_KEY` powers Jev and text generation. Shadow evaluation is the default; `TYPESAFE_MODE=off` disables it. Advisory failure never blocks a valid engine result. Keep all credentials out of browser variables and source control. Supabase configuration is still required for live saves; see [deployment](deployment.md).
 
 Start with DeepSeek V4.1 Flash for both generative stages. It supports structured proposals and permits reasoning to be disabled for short narration. This is a cost/control rationale, not evidence that its fiction is better than GLM's.
+
+The default DeepSeek model automatically uses `low` proposal reasoning and `none` narration reasoning. For a different model, omitted reasoning settings defer to that provider's defaults; configure supported controls explicitly when comparing alternatives.
 
 ## Models to compare
 

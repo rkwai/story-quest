@@ -1,6 +1,7 @@
 import { EngineError } from '@/engine/types';
 
 export type ModelStage = 'proposal' | 'narration';
+const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash';
 export class ModelCallError extends EngineError {
   constructor(code: string, public metrics: Record<string, unknown>) { super(code); }
 }
@@ -19,10 +20,12 @@ function usageMetrics(value: unknown) {
 }
 
 export async function generate(stage: ModelStage, system: string, content: unknown, maxTokens: number, promptVersion: string, schema?: Record<string, unknown>): Promise<{ text: string; metrics: Record<string, unknown> & { durationMs: number } }> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = stage === 'proposal' ? process.env.PROPOSAL_MODEL || process.env.STORY_MODEL : process.env.STORY_MODEL;
-  if (!apiKey || !model) throw new EngineError('NOT_CONFIGURED');
-  const effort = process.env[stage === 'proposal' ? 'PROPOSAL_REASONING_EFFORT' : 'STORY_REASONING_EFFORT'];
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  const storyModel = process.env.STORY_MODEL?.trim() || DEFAULT_MODEL;
+  const model = stage === 'proposal' ? process.env.PROPOSAL_MODEL?.trim() || storyModel : storyModel;
+  if (!apiKey) throw new EngineError('NOT_CONFIGURED');
+  const effort = process.env[stage === 'proposal' ? 'PROPOSAL_REASONING_EFFORT' : 'STORY_REASONING_EFFORT']?.trim()
+    || (model === DEFAULT_MODEL ? stage === 'proposal' ? 'low' : 'none' : undefined);
   if (effort && !['none','minimal','low','medium','high','xhigh'].includes(effort)) throw new EngineError('NOT_CONFIGURED');
   const started = performance.now();
   const metrics: Record<string, unknown> = { generationId: crypto.randomUUID(), provider: 'openrouter', stage, requestedModel: model, promptVersion, reasoningEffort: effort || 'provider_default' };

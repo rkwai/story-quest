@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient, type Session } from '@supabase/supab
 import { demoTurn, newSample, OPENING, suggestions } from '@/engine/demo';
 import { playerView } from '@/engine/view';
 import { worldSchema, publicTurnSchema, type PlayerView, type PublicTurn } from '@/engine/types';
+import { publicSupabaseConfig } from '@/lib/supabase-public';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
 const SAMPLE_KEY = 'storyquest.sample.v2';
@@ -69,7 +70,9 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     } catch { setNotice('Your saved sample could not be restored. A fresh sample is ready.'); }
     setReady(true);
     if (liveAvailable) {
-      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+      const { url, key } = publicSupabaseConfig();
+      if (!url || !key) { setNotice('Live adventures are not available yet. You can explore the sample.'); return; }
+      const supabase = createClient(url, key);
       client.current = supabase;
       supabase.auth.getSession().then(({data}) => setSession(data.session));
       const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));

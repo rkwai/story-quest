@@ -101,3 +101,18 @@ test('a non-reasoning storyteller works without a reasoning parameter', async t 
   const result = await narrate(playerView(seedWorld()), { id: 't2', input: 'Wait', interpretation: 'Wait', changes: [], narration: null, revision: 1 });
   assert.equal(result.metrics.reasoningEffort, 'provider_default');
 });
+
+test('an OpenRouter key alone uses the accepted DeepSeek defaults for both stages', async t => {
+  config(t);
+  for (const key of ['STORY_MODEL', 'PROPOSAL_MODEL', 'PROPOSAL_REASONING_EFFORT', 'STORY_REASONING_EFFORT']) delete process.env[key];
+  const requests: Record<string, unknown>[] = [];
+  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    const body = JSON.parse(options.body as string);
+    requests.push(body);
+    return Response.json(envelope(body.response_format ? JSON.stringify(proposal) : 'Rain settles on the road.'));
+  });
+  await propose({}, 'Wait');
+  await narrate(playerView(seedWorld()), { id: 'defaults', input: 'Wait', interpretation: 'Wait', changes: [], narration: null, revision: 1 });
+  assert.deepEqual(requests.map(body => body.model), ['deepseek/deepseek-v4.1-flash', 'deepseek/deepseek-v4.1-flash']);
+  assert.deepEqual(requests.map(body => body.reasoning), [{ effort: 'low', exclude: true }, { effort: 'none', exclude: true }]);
+});

@@ -39,7 +39,7 @@ Stream narration, replay UI for operators, player correction reports tied to tur
 
 Vercel and Supabase operational tools are now available. Production sample: https://story-quest-seven.vercel.app (application commit `30cc66d`, deployment READY; expected page returned HTTP 200). Deployment used the connected app with source files. Git-triggered releases are not linked yet. See docs/deployment.md for provider IDs and exact verification limits.
 
-Supabase project `cpybqwezigwkhxldxwiv` is ACTIVE_HEALTHY under DataSaa at the provider-quoted $0/month. Migration `20260917084314_story_engine.sql` is applied; table RLS and browser access denial verified. Security advisor returned only intentional informational no-policy notices. Auth settings, production environment values and explicit model selection remain outstanding; exact dashboard links and configuration are in docs/deployment.md.
+Supabase project `cpybqwezigwkhxldxwiv` is ACTIVE_HEALTHY under DataSaa at the provider-quoted $0/month. Migration `20260917084314_story_engine.sql` is applied; table RLS and browser access denial verified. Security advisor returned only intentional informational no-policy notices. Auth settings and production environment values still require live verification; the accepted DeepSeek model configuration now has built-in defaults. Exact dashboard links and configuration are in docs/deployment.md.
 
 ## Next session
 
@@ -55,10 +55,16 @@ Read completed items and latest verification below. Continue the earliest incomp
 - TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
 - Hosted migration and database access controls are verified. Email sign-in and actual model responses still require verification. The Vercel production sample is verified separately above.
 
-Next action: configure Supabase Auth URL/email settings and the five Vercel environment values, redeploy, then run a real authenticated turn and inspect its traces. Set OPENROUTER_API_KEY plus STORY_MODEL and optional PROPOSAL_MODEL using docs/models.md. The same OPENROUTER_API_KEY enables bounded ~typesafe/jev-latest shadow reviews; gameplay authority still belongs to the engine.
+Next action: verify the existing Supabase project is linked to Vercel, the synced variables and OPENROUTER_API_KEY reach production, and Supabase Auth URL/email settings are correct. Redeploy before testing newly added values, then run a real authenticated turn and inspect its traces. Model settings are optional overrides described in docs/models.md. The same OPENROUTER_API_KEY enables bounded ~typesafe/jev-latest shadow reviews; gameplay authority still belongs to the engine.
 
 ## OpenRouter + Jev provider slice
 
 Implemented separate OpenRouter proposal and narration model configuration, strict JSON-schema provider routing for proposals, plain-prose narration, bounded reasoning/token controls, and sanitized provider/usage/cost/error traces. OpenRouter ~typesafe/jev-latest reviews intent and continuity in one private advisory batch when configured; no review can change or veto state. Jev launched on OpenRouter on September 18; its alpha Decisions API replaces the native TypeSafe transport and no second model key is needed. Model recommendations and primary sources are in docs/models.md. Live keys, hosted authentication and real model quality/cost measurements remain outstanding.
 
 Verification for this slice: TypeScript check, all 24 engine/database/provider tests and the production build pass. Provider tests use mocked responses and prove routing, schema rejection, token-cost metadata filtering, finite Jev timeout/no retries, optional/sparse confidence data and public narration context. They do not prove real-model prose quality or semantic accuracy. The private DM clarification string now stays in traces; the browser receives a fixed safe question. On September 18, the Jev alpha route was additionally verified with an unauthenticated empty POST (401); authenticated inference remains untested. The unused native TypeSafe SDK was removed.
+
+## Supabase integration compatibility
+
+Rick added OPENROUTER_API_KEY in Vercel. The current Supabase integration supplies NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY; the app previously required legacy variable names. Updated client, server and live-availability checks to prefer modern names with legacy fallback, and removed the need to manually set the agreed model defaults. The new /api/health reports configuration presence only, never secret values, and makes no database or model requests. This lets a deployed release verify environment synchronization without exposing credentials. A configured response still requires a real sign-in and model turn before claiming live gameplay works.
+
+Verification: all 31 engine/database/provider/configuration tests, TypeScript check and production build pass. Compatibility tests cover modern-only configuration, legacy fallback, precedence, missing values, public response filtering and the accepted model defaults. Production environment synchronization and real authentication must be checked separately after deployment.
