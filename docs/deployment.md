@@ -28,6 +28,8 @@ The connected app deployed tracked active source files directly (legacy and envi
 
 ## Hosted Supabase
 
+2026-09-18 connection update: Rick linked the existing projects. Production deployment `dpl_AwhfqccJ3ucuXT5Kwkuy5F3DqaSx` (application `e9da55d`) is READY; `/api/health` returns 200 with all required configuration flags true. The production home page now enables live sign-in. Auth redirects, credential validity and the real model flow require the opt-in live verification described in maintenance.md.
+
 Project `story-quest` (`cpybqwezigwkhxldxwiv`) is ACTIVE_HEALTHY under DataSaa (`pevdfgjydqafmcscwqpt`), us-east-1, close to the Vercel server region. Rick selected the organization; the provider quoted $0/month and its cost-confirmation step completed. [Project dashboard](https://supabase.com/dashboard/project/cpybqwezigwkhxldxwiv).
 
 Migration `story_engine` was applied successfully as remote version `20260917084314`. The local filename now matches that version to avoid duplicate application by future CLI pushes. Four application tables have RLS enabled, anon/authenticated have no SELECT privileges, and service_role has CRUD access. The security advisor reported only four informational [RLS enabled with no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) findings. This is intentional: authoritative snapshots, hidden history and traces are server-only. Do not add browser read policies to silence them.

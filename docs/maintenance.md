@@ -35,3 +35,11 @@ Operational trace retention target is 30 days; implement/schedule centralized cl
 ## Reliability gates
 
 Engine invariants, idempotent retries, concurrent revision handling, owner isolation, secret filtering and narration-failure recovery are required tests. Phone UI checks cover typing, pending submission, tab navigation, persisted sample and long text. Live model tests require credentials and must report their sample size; mock success is not proof of AI quality.
+
+## Opt-in hosted verification
+
+After a configured production deployment is READY, run `npm run verify:live -- --execute` in a trusted environment with the same Supabase and OpenRouter variables. The script is deliberately separate from normal builds and requires explicit opt-in: it creates one isolated QA account and campaign, exercises the real hosted APIs and spends a small amount on one proposal, one Jev review and one narration. It makes no automatic paid retries. The target application and Supabase project are fixed to StoryQuest.
+
+The check covers Auth sign-in and magic-link redirection, campaign creation, committed state, narration, reload, same-turn replay and denial of direct player reads of private database tables. It prints only sanitized stage/results and provider usage metadata. Keys, passwords, sessions, magic links and story/context data stay out of logs. The exact QA user is deleted in cleanup, cascading its campaign, turns, traces and rate limits. A failed cleanup is an error requiring investigation; never bulk-delete users to recover a test.
+
+When workstation credentials are unavailable, the same script can run as an explicit one-off deployment-build verification against the already READY production release. Append the opt-in command only to that verification build, then restore the standard build. Never add a public endpoint that runs paid tests or exports credentials. This checks the current hosted release, not the still-building deployment. It does not prove email delivery, visual browser behavior, long-campaign continuity or model quality beyond the tested turn.
