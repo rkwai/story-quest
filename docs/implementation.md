@@ -84,3 +84,14 @@ Verification: TypeScript, all 33 regression tests, and the Next.js production bu
 
 
 Hosted reset deployment `dpl_DDXEMNp2Uk9H8iCUE8hubU3FVihb` (commit `30835ac`) is READY on the production URL. The subsequent temporary test build was rejected before execution; no QA account or verification-run claim was created and no paid model calls ran. Production health remains configured. Do not treat reset's database/regression checks as proof of a real-model turn.
+
+
+## First roleplay report: preview routed dialogue to the wrong scene
+
+Rick asked the woman why she was still in the desolate area, but received an interpretation about Ashford's destruction and the buried bell. This was reproduced exactly in `src/engine/demo.ts`: the scripted sample matched any `woman|mara|speak|ask|talk` keyword to one canned branch. The quote was authored sample text, not a model response. At investigation time Supabase contained zero campaigns, turns and traces. Neither the storytelling model nor Jev handled the reported interaction. Jev remains advisory-only in live play and cannot change/reject proposals.
+
+Fix: remove keyword dispatch entirely and accept only the three explicit preview choices. Unsupported or edited text returns an unchanged world and a clear sample limitation. Remove the preview's free-text composer; show prominent “Scripted preview · No AI” copy and a Start an AI adventure action. New sign-ins open campaign creation/selection. Live campaigns retain unrestricted input. Correct the canned prose that invented the player asking Mara's name. Previously saved preview history is retained rather than silently rewritten.
+
+Regression fixtures include both reported questions plus negated actions and edited preset text. The hosted AI pipeline is still unverified; passing these fixtures proves that the misleading sample behavior is fixed, not that real-model intent fidelity or story consistency is solved. Next live acceptance case must ask why the woman is here, preserve that subject and question, and compare the accepted proposal/public outcome/narration against it. Do not evaluate Jev or change its authority based on scripted-preview behavior.
+
+Verification: TypeScript check, all 36 regression tests and the production build pass. The phone browser test was updated for explicit preset selection; it was not rerun in this verification pass. Hosted preview and AI-entry checks follow deployment; authenticated model behavior remains unverified.

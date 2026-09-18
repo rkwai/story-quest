@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
 .reset-panel{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:8px;background:var(--tint)}.reset-panel h3{font-size:22px}.reset-panel p{font-size:13px;line-height:1.8;margin-bottom:10px}.reset-panel .text-button{min-height:44px}.reset-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.reset-actions .primary{margin:8px 0}
+
+.mode-notice{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px;margin:0 0 24px;border:1px solid #d7dfcc;border-radius:10px;background:var(--tint)}.mode-notice h2{font-size:23px;margin-bottom:8px}.mode-notice p{font-size:14px;line-height:1.7;max-width:640px;margin-bottom:0}.mode-notice .primary{flex-shrink:0;margin:0}.sample-choices button{min-height:44px;font-size:12px}.sample-choices{margin-bottom:0}@media(max-width:540px){.mode-notice{align-items:stretch;flex-direction:column;padding:18px 20px;gap:14px}.mode-notice h2{font-size:22px}.mode-notice p{font-size:13px}.mode-notice .primary{width:100%}}

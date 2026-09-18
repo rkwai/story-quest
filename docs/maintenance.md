@@ -10,7 +10,7 @@ No public operator endpoint in the first slice. Inspect traces with privileged S
 
 ## Debugging a turn
 
-1. Find the campaign and turn ID from the UI error/report; query accepted turns and trace stages.
+1. Confirm the play mode. The scripted preview has preset buttons and no model calls or hosted traces. For an AI adventure, find the campaign and turn ID from the UI error/report; query accepted turns and trace stages.
 2. Check whether commit happened. If yes, do not resubmit a new action ID to recover narration.
 3. Replay the seed plus accepted proposals through the matching engine version and compare the snapshot.
 4. Inspect context IDs: was the relevant fact retrieved? Did interpretation, adjudication, validation or narration introduce the discrepancy?

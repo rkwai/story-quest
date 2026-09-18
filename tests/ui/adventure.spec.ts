@@ -6,8 +6,10 @@ test('phone sample persists choices and separates claims from world facts',async
  await page.setViewportSize({width:1280,height:900});
  await page.screenshot({path:test.info().outputPath('desktop.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
+ await expect(page.getByRole('region',{name:'Play mode'})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Your action'})).toHaveCount(0);
  await page.getByRole('button',{name:'Ask the woman what happened'}).click();
- await page.getByRole('button',{name:'Send action'}).click();
+
  await expect(page.getByText('The woman at the arch introduces herself as Mara.')).toBeVisible();
  await page.getByRole('button',{name:'Journal',exact:true}).click();
  await expect(page.getByText('The woman at the arch · Unverified account')).toBeVisible();

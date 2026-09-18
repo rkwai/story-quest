@@ -16,7 +16,7 @@ A living story you can talk to. A mobile-first, entirely text-based adventure wi
 
 Next.js / TypeScript frontend and server routes on **Vercel**; **Supabase** Auth and PostgreSQL for persistent campaigns, atomic commits and operational traces. The original Express/React prototype is preserved in `legacy/` and is not deployed.
 
-The first slice provides a phone-friendly Story, Character, Journal and World interface; a local scripted sample; account-preserving campaign reset with archived history; a typed world reducer; scoped context; Supabase persistence; and a two-stage live DM integration. The sample is explicitly scripted, not an AI demonstration. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
+The first slice provides a phone-friendly Story, Character, Journal and World interface; a local scripted sample; account-preserving campaign reset with archived history; a typed world reducer; scoped context; Supabase persistence; and a two-stage live DM integration. The preview is prewritten and has only three preset buttons. Use **Start an AI adventure**, sign in, and begin a campaign to roleplay in your own words. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
 
 ## Run
 

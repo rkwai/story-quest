@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
-import { demoTurn, newSample, OPENING, suggestions } from '@/engine/demo';
+import { demoTurn, newSample, OPENING, suggestions, type SampleChoice } from '@/engine/demo';
 import { playerView } from '@/engine/view';
 import { worldSchema, publicTurnSchema, type PlayerView, type PublicTurn } from '@/engine/types';
 import { publicSupabaseConfig } from '@/lib/supabase-public';
@@ -92,8 +92,17 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   }, [sample,ready]);
   useEffect(() => {
     if (!session) return;
-    const id = localStorage.getItem(campaignKey(session.user.id));
-    if (id) loadCampaign(id).catch(() => setNotice('We could not restore your adventure. Open Your adventures to try again.'));
+    let cancelled=false;
+    let id:string|null=null;
+    try { id=localStorage.getItem(campaignKey(session.user.id)); } catch { /* Choose a saved adventure from the account panel instead. */ }
+    if (id) loadCampaign(id).catch(() => { setNotice('We could not restore your adventure. Choose it in Your adventures.'); setAccount(true); });
+    else {
+      // A new sign-in should lead into AI play, not leave the player in the sample.
+      setAccount(true);
+      setCampaigns([]);
+      api('/api/campaigns').then(data=>{if(!cancelled)setCampaigns(data.campaigns);}).catch(()=>{if(!cancelled)setAuthMessage('Could not load your adventures. Try again.');});
+    }
+    return ()=>{cancelled=true;};
     // Fetch account data when a new identity signs in, not on every token refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
@@ -172,32 +181,33 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     } catch { setNotice('Your choices are saved. The storyteller could not finish the passage; you can retry it below.'); }
     finally { setPhase(''); }
   }
+  function playSample(choice:SampleChoice) {
+    if (campaign || submitting.current) return;
+    setNotice('');
+    const result=demoTurn(sample.world,choice,crypto.randomUUID());
+    if (result.clarification) { setNotice(result.clarification); return; }
+    const next={world:result.world,turns:[...sample.turns,result.turn!]};
+    setSample(next); setView(playerView(next.world)); setTurns(next.turns);
+  }
   async function submit(e:React.FormEvent) {
     e.preventDefault();
-    const action = input.trim(); if (!action || submitting.current || archived) return;
+    const action = input.trim(); if (!campaign || !action || submitting.current || archived) return;
     submitting.current=true; setBusy(true); setNotice(''); setPhase('Considering your action…');
     try {
-      if (mode === 'sample') {
-        const result = demoTurn(sample.world,action,crypto.randomUUID());
-        if (result.clarification) { setNotice(result.clarification); return; }
-        const next = {world:result.world,turns:[...sample.turns,result.turn!]};
-        setSample(next); setView(playerView(next.world)); setTurns(next.turns); setInput('');
-      } else {
-        if (!pending.current || pending.current.input !== action || pending.current.campaign !== campaign) pending.current={id:crypto.randomUUID(),input:action,campaign:campaign!};
-        localStorage.setItem(`storyquest.pending.${campaign}`,JSON.stringify(pending.current));
-        const data = await api('/api/turns', {campaignId:campaign,turnId:pending.current.id,revision:view.revision,input:action});
-        if (data.clarification) { setNotice(data.clarification); pending.current=null; localStorage.removeItem(`storyquest.pending.${campaign}`); return; }
-        setInput('');
-        if (data.view) setView(data.view);
-        if (data.replayed) await loadCampaign(campaign!);
-        else setTurns(old => [...old.filter(t=>t.id!==data.turn.id),data.turn]);
-        pending.current=null; localStorage.removeItem(`storyquest.pending.${campaign}`);
-        if (!data.turn.narration) await finishNarration(data.turn.id,campaign!);
-      }
+      if (!pending.current || pending.current.input !== action || pending.current.campaign !== campaign) pending.current={id:crypto.randomUUID(),input:action,campaign};
+      localStorage.setItem(`storyquest.pending.${campaign}`,JSON.stringify(pending.current));
+      const data = await api('/api/turns', {campaignId:campaign,turnId:pending.current.id,revision:view.revision,input:action});
+      if (data.clarification) { setNotice(data.clarification); pending.current=null; localStorage.removeItem(`storyquest.pending.${campaign}`); return; }
+      setInput('');
+      if (data.view) setView(data.view);
+      if (data.replayed) await loadCampaign(campaign);
+      else setTurns(old => [...old.filter(t=>t.id!==data.turn.id),data.turn]);
+      pending.current=null; localStorage.removeItem(`storyquest.pending.${campaign}`);
+      if (!data.turn.narration) await finishNarration(data.turn.id,campaign);
     } catch (e) {
       const code=(e as Error).message;
       setNotice(messages[code] ?? 'That action could not be completed. Your text is kept; try again.');
-      if (['STALE_REVISION','CAMPAIGN_ARCHIVED'].includes(code) && campaign) await loadCampaign(campaign).catch(()=>undefined);
+      if (['STALE_REVISION','CAMPAIGN_ARCHIVED'].includes(code)) await loadCampaign(campaign).catch(()=>undefined);
     } finally { setBusy(false); submitting.current=false; setPhase(''); }
   }
   function resetSample() {
@@ -207,7 +217,8 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
 
   return <div className="app-shell">
     <header className="masthead"><a href="/" className="brand" aria-label="StoryQuest home"><Icon name="World"/><span>STORYQUEST</span></a><button className="account-button" onClick={showAccount} disabled={busy}>Your adventures <span className="avatar">{view.character.name.slice(0,1)}</span></button></header>
-    <div className="page-heading"><div><p className="eyebrow">{mode==='sample'?'A SAMPLE ADVENTURE':archived?'A PREVIOUS ADVENTURE':'YOUR LIVING STORY'}</p><h1>{view.title}</h1><p className="subheading">Some stories are waiting to be found. This one is yours to unfold.</p></div><span className="save-indicator"><span/>{mode==='sample'?'Saved on this device':archived?'History preserved':'Your story is saved'}</span></div>
+    <div className="page-heading"><div><p className="eyebrow">{mode==='sample'?'SCRIPTED PREVIEW · NO AI':archived?'A PREVIOUS ADVENTURE':'YOUR AI ADVENTURE'}</p><h1>{view.title}</h1><p className="subheading">Some stories are waiting to be found. This one is yours to unfold.</p></div><span className="save-indicator"><span/>{mode==='sample'?'Saved on this device':archived?'History preserved':'Your story is saved'}</span></div>
+    {mode==='sample' && <section className="mode-notice" aria-label="Play mode"><div><h2>This is a scripted preview</h2><p>Its three choices play prewritten scenes. To roleplay in your own words with an AI dungeon master, start an AI adventure.</p></div>{liveAvailable ? <button className="primary" disabled={busy||!ready} onClick={showAccount}>{session?'Open AI adventures':'Start an AI adventure'}</button> : <p className="muted">AI adventures are currently unavailable.</p>}</section>}
     <nav className="bottom-nav" aria-label="Adventure navigation">{(['Story','Character','Journal','World'] as Tab[]).map(t=><button key={t} aria-current={tab===t?'page':undefined} onClick={()=>setTab(t)}><Icon name={t}/><span>{t}</span>{t==='Journal'&&view.quests.some(q=>q.status==='active')&&<i/>}</button>)}</nav>
     <div className="workspace"><main className="main-panel">
       <div className="chapter-bar"><span><span className="chapter-dot"/>{tab==='Story'?'CHAPTER I · THE ARRIVAL':tab.toUpperCase()}</span><span>{storyTime(view.minute)}</span></div>
@@ -225,9 +236,9 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           {notice && <p className="notice" role="status">{notice}</p>}
           <div ref={end}/>
         </div>
-        <div className="composer">{archived ? <><p className="composer-title">This run is complete</p><p className="muted">Your story and discoveries are preserved. Open Your adventures to continue your latest run.</p><button className="primary" onClick={showAccount}>Your adventures</button></> : <><p className="composer-title">What do you do?</p>{turns.length===0 && <div className="suggestions">{suggestions.map(s=><button disabled={busy} key={s} onClick={()=>setInput(s)}>{s}<span>↗</span></button>)}</div>}
+        <div className="composer">{archived ? <><p className="composer-title">This run is complete</p><p className="muted">Your story and discoveries are preserved. Open Your adventures to continue your latest run.</p><button className="primary" onClick={showAccount}>Your adventures</button></> : mode==='sample' ? <><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(s=><button disabled={busy||!ready} key={s} onClick={()=>playSample(s)}>{s}<span>↗</span></button>)}</div></> : <><p className="composer-title">What do you do?</p>{turns.length===0 && <div className="suggestions">{suggestions.map(s=><button disabled={busy} key={s} onClick={()=>setInput(s)}>{s}<span>↗</span></button>)}</div>}
           <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea id="action" value={input} onChange={e=>setInput(e.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
-          <div className="composer-note"><span>{mode==='sample'?'Scripted sample · 3 moments to explore':'Your words shape what happens next.'}</span><span>{input.length}/2000</span></div></>}
+          <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
         </div>
       </> : <div className="detail-body">
         {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><h3>What you carry</h3>{view.character.possessions.map(x=><div className="list-row" key={x}><Icon name="Journal"/>{x}</div>)}<h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
@@ -238,10 +249,10 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     <aside className="sidebar"><div className="sidebar-character"><div className="portrait-letter">{view.character.name.slice(0,1)}</div><p className="eyebrow">THE TRAVELER</p><h2>{view.character.name}</h2><p><span className="tiny-dot"/>{view.character.condition}</p><button className="text-button" onClick={()=>setTab('Character')}>View character <span>↗</span></button></div><div className="sidebar-quest"><p className="eyebrow">ON YOUR MIND</p><h3>{view.quests.find(q=>q.status==='active')?.title ?? 'The next chapter'}</h3><p>{view.quests.find(q=>q.status==='active')?.description ?? 'Keep exploring.'}</p><button className="text-button" onClick={()=>setTab('Journal')}>Open journal <span>↗</span></button></div><p className="aside-note">A world that remembers.<br/>A story that belongs to you.</p></aside></div>
 
     {account && <div className="modal-scrim" onClick={()=>!busy&&setAccount(false)}><section ref={modal} className="account-modal" role="dialog" aria-modal="true" aria-label="Your adventures" onClick={e=>e.stopPropagation()}><button className="close" aria-label="Close" disabled={busy} onClick={()=>setAccount(false)}><Icon name="close"/></button><p className="eyebrow">STORIES TO RETURN TO</p><h2>Your adventures</h2>
-      {!liveAvailable ? <p>Live adventures are not available yet. Explore the sample to get a feel for your story.</p> : !session ? <form onSubmit={async e=>{e.preventDefault();setBusy(true);try{const {error}=await client.current!.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin}});setAuthMessage(error?'Could not send a sign-in link. Please try again.':'Check your email for a sign-in link.');}finally{setBusy(false);}}}><p>Sign in to keep your adventures and continue from any device.</p><label htmlFor="email">Email</label><input id="email" type="email" required value={email} onChange={e=>setEmail(e.target.value)}/><button className="primary" disabled={busy}>Send sign-in link</button></form> : <>
+      {!liveAvailable ? <p>Live adventures are not available yet. Explore the sample to get a feel for your story.</p> : !session ? <form onSubmit={async e=>{e.preventDefault();setBusy(true);try{const {error}=await client.current!.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin}});setAuthMessage(error?'Could not send a sign-in link. Please try again.':'Check your email for a sign-in link.');}finally{setBusy(false);}}}><p>Sign in to start an AI adventure, speak freely to the dungeon master, and save your story.</p><label htmlFor="email">Email</label><input id="email" type="email" required value={email} onChange={e=>setEmail(e.target.value)}/><button className="primary" disabled={busy}>Send sign-in link</button></form> : <>
       <div className="campaign-list">{campaigns.map(c=><button disabled={busy} key={c.id} onClick={async()=>{setBusy(true);try{await loadCampaign(c.id);setAccount(false);}catch{setAuthMessage('Could not open this adventure.');}finally{setBusy(false);}}}>{c.title}<span>{c.archived_at?'Previous run · View history':'Continue'} · {c.revision} {c.revision===1?'turn':'turns'} · {new Date(c.created_at).toLocaleDateString()} ↗</span></button>)}</div>
       {campaign && !archived && <section className="reset-panel" aria-label="Reset current adventure">{resetConfirm ? <><h3>Start this adventure again?</h3><p>Your character and world return to the beginning. Your account stays signed in, and this run’s story remains available in Your adventures.</p><div className="reset-actions"><button ref={cancelReset} className="text-button" disabled={busy} onClick={()=>setResetConfirm(false)}>Keep playing</button><button className="primary" disabled={busy} onClick={resetCampaign}>{busy?'Resetting…':'Confirm reset'}</button></div></> : <><h3>A fresh start</h3><p>Return to the beginning with the same character and world.</p><button className="text-button" disabled={busy} onClick={()=>{setAuthMessage('');setResetConfirm(true);}}>Reset current adventure</button></>}</section>}
-      <form onSubmit={createCampaign}><h3>Begin at Ashford</h3><label htmlFor="name">Character name</label><input id="name" value={name} onChange={e=>setName(e.target.value)} required maxLength={50}/><label htmlFor="premise">Shape the world</label><textarea id="premise" value={premise} onChange={e=>setPremise(e.target.value)} required maxLength={1600} rows={4}/><button className="primary" disabled={busy}>Begin adventure</button></form><button className="text-button" disabled={busy} onClick={async()=>{await client.current?.auth.signOut();setSession(null);setCampaigns([]);resetSample();}}>Sign out</button></>}
+      <form onSubmit={createCampaign}><h3>Begin an AI adventure</h3><p>Your story opens at Ashford. The AI dungeon master responds to your own words.</p><label htmlFor="name">Character name</label><input id="name" value={name} onChange={e=>setName(e.target.value)} required maxLength={50}/><label htmlFor="premise">Shape the world</label><textarea id="premise" value={premise} onChange={e=>setPremise(e.target.value)} required maxLength={1600} rows={4}/><button className="primary" disabled={busy}>Begin adventure</button></form><button className="text-button" disabled={busy} onClick={async()=>{await client.current?.auth.signOut();setSession(null);setCampaigns([]);resetSample();}}>Sign out</button></>}
       {authMessage&&<p role="status" className="notice">{authMessage}</p>}<button className="text-button sample-reset" disabled={busy} onClick={resetSample}>Start a fresh sample</button>
     </section></div>}
   </div>;
