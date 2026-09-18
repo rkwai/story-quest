@@ -1,6 +1,6 @@
 # Models and evaluation
 
-Verified against provider documentation and the public OpenRouter catalog on **2026-09-17**. The choices below are starting configurations, not measured storytelling winners. No paid model comparison or live TypeSafe accuracy evaluation has been completed.
+Verified against provider documentation and the public OpenRouter catalog on **2026-09-18**. The choices below are starting configurations, not measured storytelling winners. No paid model comparison or live TypeSafe accuracy evaluation has been completed.
 
 ## Responsibilities
 
@@ -22,12 +22,11 @@ PROPOSAL_REASONING_EFFORT=low
 STORY_MODEL=deepseek/deepseek-v4.1-flash
 STORY_REASONING_EFFORT=none
 
-TYPESAFE_API_KEY=<optional secret>
-TYPESAFE_MODEL=jev-latest
+TYPESAFE_MODEL=~typesafe/jev-latest
 TYPESAFE_MODE=shadow
 ```
 
-`TYPESAFE_MODEL` is optional and defaults to `jev-latest`. With a TypeSafe key, shadow evaluation is the default; `TYPESAFE_MODE=off` disables it. Without a key, gameplay does not depend on TypeSafe. Keep all credentials out of browser variables and source control. Supabase configuration is still required for live saves; see [deployment](deployment.md).
+`TYPESAFE_MODEL` is optional and defaults to `~typesafe/jev-latest`. The same `OPENROUTER_API_KEY` powers Jev and text generation. Shadow evaluation is the default; `TYPESAFE_MODE=off` disables it. Advisory failure never blocks a valid engine result. Keep all credentials out of browser variables and source control. Supabase configuration is still required for live saves; see [deployment](deployment.md).
 
 Start with DeepSeek V4.1 Flash for both generative stages. It supports structured proposals and permits reasoning to be disabled for short narration. This is a cost/control rationale, not evidence that its fiction is better than GLM's.
 
@@ -40,23 +39,23 @@ Prices are USD per million tokens, advertised starting input/output rates at ver
 | DeepSeek V4.1 Flash | `deepseek/deepseek-v4.1-flash` | From $0.135 / $0.54 | 1,048,576 | Initial DM and narrator |
 | GLM 5.3 Flash | `z-ai/glm-5.3-flash` | From $0.075 / $0.25 | Up to 1,310,720; many endpoints 1,048,576 | Compare DM decisions and narration |
 | Cydonia 24B V4.1 | `thedrummer/cydonia-24b-v4.1` | $0.30 / $0.50 | 131,072 | Narration-only creative-writing experiment |
-| TypeSafe Jev | Native `jev-latest` → `jev-1.13.0` | $0.042 / free | OpenRouter's pending listing reports 32,000 | Advisory typed judgments |
+| TypeSafe Jev | OpenRouter `~typesafe/jev-latest` → `typesafe/jev-1.13` | $0.042 / free | 32,000 | Advisory typed judgments |
 
-Sources: [DeepSeek](https://openrouter.ai/deepseek/deepseek-v4.1-flash), [GLM](https://openrouter.ai/z-ai/glm-5.3-flash), [Cydonia](https://openrouter.ai/thedrummer/cydonia-24b-v4.1), [TypeSafe models and pricing](https://docs.typesafe.ai/models).
+Sources: [DeepSeek](https://openrouter.ai/deepseek/deepseek-v4.1-flash), [GLM](https://openrouter.ai/z-ai/glm-5.3-flash), [Cydonia](https://openrouter.ai/thedrummer/cydonia-24b-v4.1), [Jev on OpenRouter](https://openrouter.ai/typesafe/jev-1.13).
 
 GLM 5.3 Flash requires reasoning: use `low` for either stage when comparing it, not `none`. Its lower token price does not establish lower turn cost or latency. Cydonia is explicitly marketed for creative writing; keep DeepSeek for proposals, set `STORY_MODEL=thedrummer/cydonia-24b-v4.1`, and **omit** `STORY_REASONING_EFFORT` for narration. It has no reasoning control or tool calling. Neither specialist branding nor general benchmark scores prove continuity in this game.
 
-Use concrete generative model IDs rather than a rolling latest/router alias when comparing runs. Jev's requested `jev-latest` alias can move; its response reports the resolved version. Record requested and returned models so changes can be investigated.
+Use concrete generative model IDs rather than a rolling latest/router alias when comparing runs. Jev's requested `~typesafe/jev-latest` alias can move; its response reports the resolved version. Record requested and returned models so changes can be investigated.
 
 ## Jev availability and boundary
 
-Jev is **not yet served by OpenRouter**. Its [Jev 1.13 page](https://openrouter.ai/typesafe/jev-1.13) says it is coming soon. The catalog alias is `~typesafe/jev-latest`, but the [endpoints API](https://openrouter.ai/api/v1/models/~typesafe/jev-latest/endpoints) returned an empty endpoints list. A catalog entry is not proof of callable service.
+Jev became available on OpenRouter on **September 18, 2026**. The [Jev 1.13 listing](https://openrouter.ai/typesafe/jev-1.13) now shows the TypeSafe provider and pricing. The September 17 research correctly observed a pending listing; that finding is superseded by the launch. Use `~typesafe/jev-latest` or pin `typesafe/jev-1.13`.
 
-For now, use TypeSafe's native `POST https://api.typesafe.ai/v1/systemone` with its own key and `model: "jev-latest"`. The [API](https://docs.typesafe.ai/api) takes shared state and named typed questions: `choice`, `noul` and `score`. It returns choices, probability estimates or rubric scores, not free-form narration or arbitrary engine operations. Questions within a batch are evaluated independently; express dependencies in code rather than assuming one answer informs another. See [TypeSafe introduction](https://docs.typesafe.ai/introduction).
+Jev uses OpenRouter's dedicated `POST https://openrouter.ai/api/alpha/decisions`, documented in its [official OpenAPI schema](https://openrouter.ai/openapi.json). This is an alpha API, separate from chat completions. The adapter uses its documented request/response contract with the same bearer key as text generation. It returns typed judgments, not free-form narration or arbitrary engine operations. Questions within a batch are evaluated independently; express dependencies in code. See [TypeSafe introduction](https://docs.typesafe.ai/introduction).
 
 The first integration observes intent and candidate continuity in shadow mode. Privately log question/version identifiers, returned assessments, resolved model, usage, latency and sanitized errors. An unavailable or uncertain advisory call must not silently become an authoritative game rule. Thresholds need labeled StoryQuest cases before any gating role.
 
-When OpenRouter launches its Decisions API, verify its actual endpoint, schema, authentication, limits and prices before changing the adapter. Do not send Jev to the chat-completions endpoint or guess a gateway path.
+Because the Decisions endpoint is alpha, recheck the official schema when changing the adapter. Use the full URL above: the launch-day generated SDK incorrectly joined that path to its `/api/v1` base. An unauthenticated empty POST reached the root alpha route (401); the double-prefixed path returned 404. This verifies routing, not authenticated inference. Never route Jev through chat completions or silently fall back to a second provider account.
 
 ## Request and cost controls
 

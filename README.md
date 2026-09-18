@@ -26,7 +26,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Without credentials, the sample runs locally in the browser. For live campaigns, set Supabase URL, publishable/anon key, server-only service role key, `OPENROUTER_API_KEY`, and `STORY_MODEL`. Set `PROPOSAL_MODEL` separately for the DM or let it use `STORY_MODEL`; the proposal model must support JSON Schema. `.env.example` starts with DeepSeek V4.1 Flash. Optional `TYPESAFE_API_KEY` enables native `jev-latest` intent/continuity reviews in private shadow logs. See [model configuration and research](docs/models.md). Apply `supabase/migrations` first. Enable email sign-in and register the site URL in Supabase Auth. No secret API key belongs in a `NEXT_PUBLIC_` variable.
+Without credentials, the sample runs locally in the browser. For live campaigns, set Supabase URL, publishable/anon key, server-only service role key, `OPENROUTER_API_KEY`, and `STORY_MODEL`. Set `PROPOSAL_MODEL` separately for the DM or let it use `STORY_MODEL`; the proposal model must support JSON Schema. `.env.example` starts with DeepSeek V4.1 Flash. The same OpenRouter key powers `~typesafe/jev-latest` intent/continuity reviews in private shadow logs; no separate TypeSafe key is needed. Set `TYPESAFE_MODE=off` to disable the advisory review. See [model configuration and research](docs/models.md). Apply `supabase/migrations` first. Enable email sign-in and register the site URL in Supabase Auth. No secret API key belongs in a `NEXT_PUBLIC_` variable.
 
 ```sh
 npm run check

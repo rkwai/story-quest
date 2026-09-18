@@ -11,7 +11,7 @@ const privateContext = { facts: ['PRIVATE-WORLD-TRUTH'], rules: [] };
 
 function configure(t: TestContext, overrides: Record<string, string | undefined> = {}) {
   const values: Record<string, string | undefined> = {
-    TYPESAFE_API_KEY: 'test-typesafe-key', TYPESAFE_MODEL: undefined, TYPESAFE_MODE: undefined,
+    OPENROUTER_API_KEY: 'test-openrouter-key', TYPESAFE_API_KEY: 'unused-native-key', TYPESAFE_MODEL: undefined, TYPESAFE_MODE: undefined,
     TYPESAFE_BASE_URL: 'https://unexpected-provider.invalid', TYPESAFE_DEFAULT_MODEL: 'unexpected-model', TYPESAFE_LOG_LEVEL: 'debug',
     ...overrides
   };
@@ -28,36 +28,37 @@ function configure(t: TestContext, overrides: Record<string, string | undefined>
 
 function envelope() {
   return {
-    model: 'jev-2026-09',
+    model: 'typesafe/jev-1.13', id: 'gen-jev-123', provider: 'TypeSafe',
     answers: {
       inputMode: { type: 'choice', choice: 'action', confidence: 0.9, probabilities: { action: 0.9, dialogue: 0.05, question: 0.03, meta: 0.01, unclear: 0.01 } },
       immutableHistoryConcern: { type: 'noul', noul: 0.02 },
       worldRuleConcern: { type: 'noul', noul: 0.04 },
       unjustifiedKnowledgeConcern: { type: 'noul', noul: 0.8 }
     },
-    usage: { input_tokens: 345, output_tokens: 23 }
+    usage: { input_tokens: 345, output_tokens: 0, cost: 0.00001449 }
   };
 }
 
 test('Jev shadow is skipped with no key or explicitly off and never makes a call', async t => {
-  configure(t, { TYPESAFE_API_KEY: undefined });
+  configure(t, { OPENROUTER_API_KEY: undefined });
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new Error('unexpected network call'); });
   assert.equal((await reviewProposal(privateContext, 'Look', proposal)).status, 'skipped');
-  process.env.TYPESAFE_API_KEY = 'test-typesafe-key';
+  process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
   process.env.TYPESAFE_MODE = 'off';
   assert.equal((await reviewProposal(privateContext, 'Look', proposal)).status, 'skipped');
   assert.equal(fetchMock.mock.callCount(), 0);
 });
 
-test('Jev uses one explicit native-model batch, strips private provider metadata, and disables SDK logs', async t => {
+test('Jev uses one explicit OpenRouter Decisions batch and strips private provider metadata', async t => {
   configure(t);
   const logs = ['debug', 'info', 'warn', 'error'].map(method => t.mock.method(console, method as 'debug', () => undefined));
   const payload = { ...envelope(), reasoning: 'PRIVATE-REASONING', prompt: 'PRIVATE-PROMPT', usage: { ...envelope().usage, reasoning: 'PRIVATE-USAGE-REASONING' } };
   const fetchMock = t.mock.method(globalThis, 'fetch', async (url: string | URL | Request, init?: RequestInit) => {
-    assert.equal(url, 'https://api.typesafe.ai/v1/systemone');
+    assert.equal(url, 'https://openrouter.ai/api/alpha/decisions');
     assert.ok(init?.signal instanceof AbortSignal);
     const body = JSON.parse(String(init?.body));
-    assert.equal(body.model, 'jev-latest');
+    assert.equal(body.model, '~typesafe/jev-latest');
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer test-openrouter-key');
     assert.deepEqual(Object.keys(body.questions), ['inputMode', 'immutableHistoryConcern', 'worldRuleConcern', 'unjustifiedKnowledgeConcern']);
     assert.deepEqual(JSON.parse(body.state), { context: privateContext, input: 'Look', proposal });
     assert.equal(body.questions.inputMode.type, 'choice');
@@ -68,13 +69,16 @@ test('Jev uses one explicit native-model batch, strips private provider metadata
   const result = await reviewProposal(privateContext, 'Look', proposal);
   assert.equal(fetchMock.mock.callCount(), 1);
   assert.equal(result.status, 'ok');
-  assert.equal(result.requestedModel, 'jev-latest');
-  assert.equal(result.model, 'jev-2026-09');
-  assert.equal(result.provider, 'typesafe');
+  assert.equal(result.requestedModel, '~typesafe/jev-latest');
+  assert.equal(result.model, 'typesafe/jev-1.13');
+  assert.equal(result.servedBy, 'TypeSafe');
+  assert.equal(result.providerGenerationId, 'gen-jev-123');
+  assert.match(result.generationId, /^[a-f0-9-]{36}$/);
+  assert.equal(result.provider, 'openrouter');
   assert.equal(result.promptVersion, TYPESAFE_PROMPT_VERSION);
   assert.equal(result.answers?.inputMode.choice, 'action');
   assert.deepEqual(result.answers?.unjustifiedKnowledgeConcern, { probability: 0.8 });
-  assert.deepEqual(result.usage, { input_tokens: 345, output_tokens: 23 });
+  assert.deepEqual(result.usage, { input_tokens: 345, output_tokens: 0, costUsd: 0.00001449 });
   assert.ok(Number.isFinite(result.durationMs));
   assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
   assert.deepEqual({ privateContext, proposal }, original);
@@ -82,12 +86,12 @@ test('Jev uses one explicit native-model batch, strips private provider metadata
 });
 
 test('configured Jev model is explicit and unsafe configuration or oversized context makes no call', async t => {
-  configure(t, { TYPESAFE_MODEL: 'jev-pinned-version' });
+  configure(t, { TYPESAFE_MODEL: 'typesafe/jev-1.13' });
   const fetchMock = t.mock.method(globalThis, 'fetch', async (_url: string | URL | Request, init?: RequestInit) => {
-    assert.equal(JSON.parse(String(init?.body)).model, 'jev-pinned-version');
+    assert.equal(JSON.parse(String(init?.body)).model, 'typesafe/jev-1.13');
     return Response.json(envelope());
   });
-  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).requestedModel, 'jev-pinned-version');
+  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).requestedModel, 'typesafe/jev-1.13');
   assert.equal(fetchMock.mock.callCount(), 1);
   assert.equal((await reviewProposal('x'.repeat(TYPESAFE_STATE_LIMIT), 'Look', proposal)).status, 'invalid');
   const cyclic: { self?: unknown } = {}; cyclic.self = cyclic;
@@ -99,6 +103,40 @@ test('configured Jev model is explicit and unsafe configuration or oversized con
   assert.equal(fetchMock.mock.callCount(), 1);
 });
 
+test('gateway choice confidence may be absent and only reported finite costs are retained', async t => {
+  configure(t);
+  let cost: unknown = undefined;
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    ...envelope(), usage: { input_tokens: 100, output_tokens: 0, cost },
+    answers: { ...envelope().answers, inputMode: { type: 'choice', choice: 'action' } }
+  }));
+  for (const value of [undefined, -1, 'PRIVATE-COST-DETAIL', Infinity]) {
+    cost = value;
+    const result = await reviewProposal(privateContext, 'Look', proposal);
+    assert.equal(result.status, 'ok');
+    assert.deepEqual(result.answers?.inputMode, { choice: 'action' });
+    assert.equal(result.usage?.costUsd, null);
+    assert.ok(!JSON.stringify(result).includes('PRIVATE-'));
+  }
+  cost = 0;
+  assert.equal((await reviewProposal(privateContext, 'Look', proposal)).usage?.costUsd, 0);
+});
+
+test('gateway sparse probability maps preserve reported keys without inventing zeroes', async t => {
+  configure(t);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    ...envelope(), answers: {
+      ...envelope().answers,
+      inputMode: { type: 'choice', choice: 'action', probabilities: { action: 0.8, dialogue: 0.2 } }
+    }
+  }));
+  const result = await reviewProposal(privateContext, 'Look', proposal);
+  assert.equal(result.status, 'ok');
+  assert.deepEqual(result.answers?.inputMode, { choice: 'action', probabilities: { action: 0.8, dialogue: 0.2 } });
+  assert.equal(result.answers?.inputMode.probabilities?.question, undefined);
+  assert.equal(result.answers?.inputMode.confidence, undefined);
+});
+
 test('invalid answers, probability keys, confidence and token counts are never treated as valid metadata', async t => {
   configure(t);
   let payload: unknown = envelope();
@@ -107,7 +145,7 @@ test('invalid answers, probability keys, confidence and token counts are never t
     { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, choice: 'PRIVATE-UNEXPECTED-CHOICE' } },
     { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, confidence: 1.1 } },
     { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, confidence: Number.NaN } },
-    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, probabilities: { action: 1 } } },
+    { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, probabilities: { action: -0.1 } } },
     { ...envelope().answers, inputMode: { ...envelope().answers.inputMode, probabilities: { ...envelope().answers.inputMode.probabilities, secret: 0 } } },
     { ...envelope().answers, immutableHistoryConcern: { type: 'noul', noul: -0.1 } },
     { ...envelope().answers, unjustifiedKnowledgeConcern: { type: 'noul', noul: Infinity } },
@@ -150,7 +188,7 @@ test('Jev provider failures are sanitized and retryable errors are never retried
   assert.ok(logs.every(log => log.mock.callCount() === 0));
 });
 
-test('Jev cancels a stalled native request at four seconds without retrying', async t => {
+test('Jev cancels a stalled gateway request at four seconds without retrying', async t => {
   configure(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let aborted = false;

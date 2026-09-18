@@ -1,6 +1,6 @@
 # Implementation plan and status
 
-Updated: 2026-09-17. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-09-18. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
 ## Phase 0 — Product contract and repository reset
 
@@ -55,10 +55,10 @@ Read completed items and latest verification below. Continue the earliest incomp
 - TypeSafe shadow probe compiles and fails cleanly without a key, making no requests. Eight labeled cases are included. No live TypeSafe or DM evaluation has been run.
 - Hosted migration and database access controls are verified. Email sign-in and actual model responses still require verification. The Vercel production sample is verified separately above.
 
-Next action: configure Supabase Auth URL/email settings and the five Vercel environment values, redeploy, then run a real authenticated turn and inspect its traces. Set OPENROUTER_API_KEY plus STORY_MODEL and optional PROPOSAL_MODEL using docs/models.md. A configured TYPESAFE_API_KEY enables bounded native jev-latest shadow reviews; gameplay authority still belongs to the engine.
+Next action: configure Supabase Auth URL/email settings and the five Vercel environment values, redeploy, then run a real authenticated turn and inspect its traces. Set OPENROUTER_API_KEY plus STORY_MODEL and optional PROPOSAL_MODEL using docs/models.md. The same OPENROUTER_API_KEY enables bounded ~typesafe/jev-latest shadow reviews; gameplay authority still belongs to the engine.
 
 ## OpenRouter + Jev provider slice
 
-Implemented separate OpenRouter proposal and narration model configuration, strict JSON-schema provider routing for proposals, plain-prose narration, bounded reasoning/token controls, and sanitized provider/usage/cost/error traces. Native jev-latest reviews intent and continuity in one private advisory batch when configured; no review can change or veto state. TypeSafe remains on its native API because OpenRouter has no served Jev endpoint yet. Model recommendations and primary sources are in docs/models.md. Live keys, hosted authentication and real model quality/cost measurements remain outstanding.
+Implemented separate OpenRouter proposal and narration model configuration, strict JSON-schema provider routing for proposals, plain-prose narration, bounded reasoning/token controls, and sanitized provider/usage/cost/error traces. OpenRouter ~typesafe/jev-latest reviews intent and continuity in one private advisory batch when configured; no review can change or veto state. Jev launched on OpenRouter on September 18; its alpha Decisions API replaces the native TypeSafe transport and no second model key is needed. Model recommendations and primary sources are in docs/models.md. Live keys, hosted authentication and real model quality/cost measurements remain outstanding.
 
-Verification for this slice: TypeScript check, all 22 engine/database/provider tests and the production build pass. Provider tests use mocked responses and prove routing, schema rejection, token-cost metadata filtering, finite Jev timeout/no retries and public narration context. They do not prove real-model prose quality or semantic accuracy. The private DM clarification string now stays in traces; the browser receives a fixed safe question.
+Verification for this slice: TypeScript check, all 24 engine/database/provider tests and the production build pass. Provider tests use mocked responses and prove routing, schema rejection, token-cost metadata filtering, finite Jev timeout/no retries, optional/sparse confidence data and public narration context. They do not prove real-model prose quality or semantic accuracy. The private DM clarification string now stays in traces; the browser receives a fixed safe question. On September 18, the Jev alpha route was additionally verified with an unauthenticated empty POST (401); authenticated inference remains untested. The unused native TypeSafe SDK was removed.
