@@ -19,6 +19,7 @@ export function configurationPresence() {
     supabaseServerKey: Boolean(server.key),
     openrouterKey: Boolean(process.env.OPENROUTER_API_KEY?.trim())
   };
-  const status = Object.values(checks).every(Boolean) ? 'configured' : 'not_configured';
+  // The open lobby uses server routes only; a browser Auth key is optional.
+  const status = checks.supabaseUrl && checks.supabaseServerKey && checks.openrouterKey ? 'configured' : 'not_configured';
   return { status, checks } as const;
 }

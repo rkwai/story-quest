@@ -2,6 +2,14 @@
 
 Updated: 2026-09-18. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
+## Current delivery — open shared playtest (2026-09-18)
+
+Rick explicitly removed login and requested that anyone be able to start, resume and delete any adventure. The default entry becomes a shared lobby with one-click default creation and optional customization; the scripted preview is secondary. No email, account creation or anonymous Supabase Auth identity is required.
+
+The implementation preserves the engine and knowledge boundary: routes resolve an existing campaign’s internal quota scope server-side, new runs use a shared scope, and raw tables/RPCs remain private. The historical owner UUID is decoupled from `auth.users` and retained as an internal request-limit/serialization key. Reset continues to archive; confirmed Delete removes one run and its accepted turns/traces. Existing user runs are not removed as part of this release.
+
+Verification: TypeScript, all 40 regression tests and the production build pass. Tests cover no-login create/list/resume/delete routes, preservation of existing saves, private state filtering, shared quotas, active-lease deletion guards, deletion cascade, reset descendants and verification-ledger retention. Migration `20260918220546_open_playtest_lobby` is applied in Supabase; its filename matches the hosted version. A hosted query confirms one shared scope and no browser-role access to raw state, traces or delete RPCs. Security advisor has only six intentional informational RLS-without-policy notices on private tables. Hosted browser checks follow deployment. The phone browser scenarios were updated but not executed in this pass; real model dialogue remains unverified. The auth-based verify:live script is legacy and is not the acceptance gate for open mode. Normal builds must never invoke a paid playtest.
+
 ## Phase 0 — Product contract and repository reset
 
 - [x] Capture agreed experience, authority/knowledge boundaries and lazy world evolution.
@@ -11,17 +19,17 @@ Updated: 2026-09-18. This file is the handoff across sessions. Checkboxes mean i
 ## Phase 1 — Playable foundation (current)
 
 - [x] Mobile Story, Character, Journal and World views.
-- [x] Explicit scripted sample with browser persistence and recovery.
+- [x] Explicit scripted preview with preset choices; optional secondary entry from the shared lobby.
 - [x] Typed engine operations; immutable facts; knowledge/claims; deadline resolution; replay.
 - [x] Bounded context retrieval and explicit semantic limitations.
-- [x] Supabase auth, owner checks, private state, turn leases and atomic versioned commits.
+- [x] Supabase private state, turn leases and atomic versioned commits. Earlier account ownership checks are superseded by the open shared-playtest decision.
 - [x] Live DM proposal -> commit -> narration, with retry/fallback behavior.
 - [x] Private diagnostic traces and versioned prompts.
 - [x] Meaningful engine/database/phone-flow verification and production build.
 - [x] Push implementation to master; GitHub CI passed on b76f10a.
 - [x] Verify hosted production sample deployment (READY and HTTP 200).
 - [x] Create dedicated DataSaa Supabase project, apply schema and verify server-only access.
-- [ ] Configure auth/environment values and verify a real authenticated model turn.
+- [ ] Complete and verify the open lobby: no-login create/resume/reset/delete plus a real model turn.
 
 ## Phase 2 — Prove continuity
 
@@ -33,9 +41,13 @@ Normalize entity/fact/event indexes, add full-text retrieval and explicit depend
 
 ## Phase 4 — Operations and polish
 
-Stream narration, replay UI for operators, player correction reports tied to turns, downloadable player journal, account/campaign deletion, trace retention tooling, spending dashboard and configurable campaign quotas. Validate restore/rollback in the actual connected deployment. Offline sample is separate from live saves; do not automatically promote its hidden client state to server authority.
+Stream narration, replay UI for operators, player correction reports tied to turns, downloadable player journal, trace retention tooling, spending dashboard and configurable campaign quotas. Validate restore/rollback in the actual connected deployment. Offline sample is separate from live saves; do not automatically promote its hidden client state to server authority.
 
 ## Deployment access
+
+Current access policy: the release target is an open lobby with shared adventures and no login. Account-scoped sign-in observations in the historical sections below do not prescribe current setup. Use docs/deployment.md for project IDs/configuration and record the latest hosted result in this section after release.
+
+### Earlier deployment record — superseded access policy
 
 Vercel and Supabase operational tools are now available. Production: https://story-quest-seven.vercel.app (application commit `e9da55d`, configured deployment READY; home and /api/health returned HTTP 200). Rick completed the Supabase/Vercel project connection; the redeployed app sees both public Supabase values, its server key and the OpenRouter key. Live sign-in is enabled. Deployment used the connected app with source files. Git-triggered releases are not linked yet. See docs/deployment.md for provider IDs and exact verification limits.
 
@@ -43,10 +55,10 @@ Supabase project `cpybqwezigwkhxldxwiv` is ACTIVE_HEALTHY under DataSaa at the p
 
 ## Next session
 
-Read completed items and latest verification below. Continue the earliest incomplete phase, release verified work to production automatically, and report actual blockers precisely.
+Read Current delivery first. Earlier sign-in requirements and auth-based playtest instructions below are superseded by the open-lobby decision; retain their observations as history, not as setup work to repeat. Read completed items and latest verification below. Continue the earliest incomplete phase, release verified work to production automatically, and report actual blockers precisely.
 
 
-## Verification — first foundation slice
+## Historical verification — first foundation slice
 
 - TypeScript check and Next.js production build pass.
 - 11 engine/PostgreSQL tests pass. The migration is executed against PGlite PostgreSQL with Supabase-like roles, including service_role execution, owner checks, secret isolation, immutable accepted turns, version checks, retry idempotency and narration leases.
@@ -57,13 +69,13 @@ Read completed items and latest verification below. Continue the earliest incomp
 
 Next action: verify the existing Supabase project is linked to Vercel, the synced variables and OPENROUTER_API_KEY reach production, and Supabase Auth URL/email settings are correct. Redeploy before testing newly added values, then run a real authenticated turn and inspect its traces. Model settings are optional overrides described in docs/models.md. The same OPENROUTER_API_KEY enables bounded ~typesafe/jev-latest shadow reviews; gameplay authority still belongs to the engine.
 
-## OpenRouter + Jev provider slice
+## Historical verification — OpenRouter + Jev provider slice
 
 Implemented separate OpenRouter proposal and narration model configuration, strict JSON-schema provider routing for proposals, plain-prose narration, bounded reasoning/token controls, and sanitized provider/usage/cost/error traces. OpenRouter ~typesafe/jev-latest reviews intent and continuity in one private advisory batch when configured; no review can change or veto state. Jev launched on OpenRouter on September 18; its alpha Decisions API replaces the native TypeSafe transport and no second model key is needed. Model recommendations and primary sources are in docs/models.md. Live keys, hosted authentication and real model quality/cost measurements remain outstanding.
 
 Verification for this slice: TypeScript check, all 24 engine/database/provider tests and the production build pass. Provider tests use mocked responses and prove routing, schema rejection, token-cost metadata filtering, finite Jev timeout/no retries, optional/sparse confidence data and public narration context. They do not prove real-model prose quality or semantic accuracy. The private DM clarification string now stays in traces; the browser receives a fixed safe question. On September 18, the Jev alpha route was additionally verified with an unauthenticated empty POST (401); authenticated inference remains untested. The unused native TypeSafe SDK was removed.
 
-## Supabase integration compatibility
+## Historical verification — Supabase integration compatibility
 
 Rick added OPENROUTER_API_KEY in Vercel. The current Supabase integration supplies NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY; the app previously required legacy variable names. Updated client, server and live-availability checks to prefer modern names with legacy fallback, and removed the need to manually set the agreed model defaults. The new /api/health reports configuration presence only, never secret values, and makes no database or model requests. This lets a deployed release verify environment synchronization without exposing credentials. A configured response still requires a real sign-in and model turn before claiming live gameplay works.
 
@@ -74,7 +86,7 @@ Hosted configuration verified after Rick connected the projects: deployment `dpl
 The attempted verification deployment was rejected by automatic approval review before execution: appending the paid smoke command to the uploaded build configuration could repeat paid calls and test-account mutations on subsequent builds. No paid smoke or QA-account creation occurred. Keep the normal build command unchanged. Do not retry that build hook without resolving the review requirement; use an explicitly authorized one-time invocation in a trusted runtime instead. The live user flow remains unverified.
 
 
-## Retained playtest account and campaign reset
+## Historical verification — retained playtest account and campaign reset
 
 Rick authorized the live playtest and asked to keep its account for future iteration. Reset now archives an adventure and creates a fresh run from the original seed, without deleting the account or prior history. Archived runs remain readable and reject new actions. Owner-scoped reset IDs make retries idempotent; resets wait for any active turn lease and do not consume a new active-campaign slot. The UI includes confirmation and a list of active/archived adventures.
 
@@ -86,7 +98,7 @@ Verification: TypeScript, all 33 regression tests, and the Next.js production bu
 Hosted reset deployment `dpl_DDXEMNp2Uk9H8iCUE8hubU3FVihb` (commit `30835ac`) is READY on the production URL. The subsequent temporary test build was rejected before execution; no QA account or verification-run claim was created and no paid model calls ran. Production health remains configured. Do not treat reset's database/regression checks as proof of a real-model turn.
 
 
-## First roleplay report: preview routed dialogue to the wrong scene
+## Historical incident — preview routed dialogue to the wrong scene
 
 Rick asked the woman why she was still in the desolate area, but received an interpretation about Ashford's destruction and the buried bell. This was reproduced exactly in `src/engine/demo.ts`: the scripted sample matched any `woman|mara|speak|ask|talk` keyword to one canned branch. The quote was authored sample text, not a model response. At investigation time Supabase contained zero campaigns, turns and traces. Neither the storytelling model nor Jev handled the reported interaction. Jev remains advisory-only in live play and cannot change/reject proposals.
 

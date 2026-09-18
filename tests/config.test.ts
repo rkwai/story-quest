@@ -76,7 +76,6 @@ test('missing or blank requirements produce false flags and a503 health response
   configure(t, modern);
   const requirements = {
     NEXT_PUBLIC_SUPABASE_URL: 'supabaseUrl',
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'supabasePublicKey',
     SUPABASE_SECRET_KEY: 'supabaseServerKey',
     OPENROUTER_API_KEY: 'openrouterKey'
   } as const;
@@ -93,6 +92,16 @@ test('missing or blank requirements produce false flags and a503 health response
     }
     process.env[key] = previous;
   }
+});
+
+test('open play needs no browser Auth key or email configuration', async t => {
+  configure(t, { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SECRET_KEY: 'server-example', OPENROUTER_API_KEY: 'router-example' });
+  const response = GET();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    status: 'configured',
+    checks: { supabaseUrl: true, supabasePublicKey: false, supabaseServerKey: true, openrouterKey: true }
+  });
 });
 
 test('server configuration refuses browser execution', t => {

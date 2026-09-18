@@ -14,9 +14,11 @@ A living story you can talk to. A mobile-first, entirely text-based adventure wi
 
 ## Active implementation
 
-Next.js / TypeScript frontend and server routes on **Vercel**; **Supabase** Auth and PostgreSQL for persistent campaigns, atomic commits and operational traces. The original Express/React prototype is preserved in `legacy/` and is not deployed.
+Next.js / TypeScript frontend and server routes on **Vercel**; **Supabase** PostgreSQL for persistent campaigns, atomic commits and operational traces. Current playtesting is open and shared; no login is required. The original Express/React prototype is preserved in `legacy/` and is not deployed.
 
-The first slice provides a phone-friendly Story, Character, Journal and World interface; a local scripted sample; account-preserving campaign reset with archived history; a typed world reducer; scoped context; Supabase persistence; and a two-stage live DM integration. The preview is prewritten and has only three preset buttons. Use **Start an AI adventure**, sign in, and begin a campaign to roleplay in your own words. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
+The home screen is a shared adventure lobby. Start a new adventure with one click, optionally customize its seed, or resume an existing run. Everyone can see and continue the same adventures. Reset archives the old run and starts from its original seed; confirmed Delete permanently removes the selected run, its turns and diagnostics.
+
+Adventures provide phone-friendly Story, Character, Journal and World views, free-text roleplay, a typed world reducer, scoped context, persistent saves and a two-stage live DM integration. A separate scripted preview uses only three preset buttons and makes no model calls. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
 
 ## Run
 
@@ -26,7 +28,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Without credentials, the sample runs locally in the browser. For live campaigns, link the existing Supabase project through its Vercel integration and add `OPENROUTER_API_KEY`. The app reads the integration's `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and server-only `SUPABASE_SECRET_KEY`; legacy anon/service-role variable names remain supported. DeepSeek V4.1 Flash is the built-in DM and narrator default. Optional `STORY_MODEL` and `PROPOSAL_MODEL` override it; the proposal model must support JSON Schema. The same OpenRouter key powers `~typesafe/jev-latest` intent/continuity reviews in private shadow logs; no separate TypeSafe key is needed. Set `TYPESAFE_MODE=off` to disable the advisory review. See [model configuration and research](docs/models.md). Apply `supabase/migrations` first. Enable email sign-in and register the site URL in Supabase Auth. No secret API key belongs in a `NEXT_PUBLIC_` variable.
+Without server configuration, the clearly labeled scripted preview can run locally in the browser. For live campaigns, link the existing Supabase project through its Vercel integration and add `OPENROUTER_API_KEY`. The server reads the integration's `NEXT_PUBLIC_SUPABASE_URL` and server-only `SUPABASE_SECRET_KEY` (legacy `SUPABASE_SERVICE_ROLE_KEY` is supported). The integration may also supply a publishable/anon key, but open play does not require it. DeepSeek V4.1 Flash is the built-in DM and narrator default. Optional `STORY_MODEL` and `PROPOSAL_MODEL` override it; the proposal model must support JSON Schema. The same OpenRouter key powers `~typesafe/jev-latest` intent/continuity reviews in private shadow logs; no separate TypeSafe key is needed. Set `TYPESAFE_MODE=off` to disable the advisory review. See [model configuration and research](docs/models.md). Apply all `supabase/migrations` first, including the open-lobby migration. Email, SMTP, Supabase Auth configuration and player API keys are not prerequisites for this mode. Raw database tables remain private; public application routes return only player-visible data. Quotas and turn leases remain active. No secret API key belongs in a `NEXT_PUBLIC_` variable.
 
 ```sh
 npm run check

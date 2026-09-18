@@ -7,13 +7,35 @@ export function database() {
   if (!url || !key) throw new EngineError('NOT_CONFIGURED');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-export async function authenticate(request: Request) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer /, '');
-  if (!token) throw new EngineError('UNAUTHORIZED');
-  const db = database();
-  const { data, error } = await db.auth.getUser(token);
-  if (error || !data.user) throw new EngineError('UNAUTHORIZED');
-  return { db, owner: data.user.id };
+// Playtest adventures are deliberately shared. Owner IDs remain internal RPC
+// scopes for existing saves, not identities supplied or authenticated by clients.
+export async function campaignAccess(campaignId: string, db = database()) {
+  const { data, error } = await db.from('campaigns').select('owner_id').eq('id', campaignId).maybeSingle();
+  checkDb(error);
+  if (!data) throw new EngineError('NOT_FOUND');
+  return { db, owner: data.owner_id as string };
+}
+export async function playtestScope(db = database()) {
+  const { data, error } = await db.from('playtest_scope').select('id').eq('singleton', true).single();
+  checkDb(error);
+  if (!data) throw new EngineError('NOT_CONFIGURED');
+  return { db, owner: data.id as string };
+}
+export function requireSameOrigin(request: Request) {
+  const site = request.headers.get('sec-fetch-site');
+  const origin = request.headers.get('origin');
+  const url = new URL(request.url);
+  // Next's development URL may use 0.0.0.0 while the browser uses localhost.
+  // Host is the browser-addressed authority; browsers cannot override it.
+  const expectedOrigin = `${url.protocol}//${request.headers.get('host') ?? url.host}`;
+  if (site === 'cross-site' || site === 'same-site' || (origin !== null && origin !== expectedOrigin)) {
+    throw new EngineError('CROSS_ORIGIN_REQUEST');
+  }
+  // JSON also prevents cross-site HTML forms from causing a mutation when
+  // Fetch Metadata is absent. Non-browser clients can still use this open API.
+  if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
+    throw new EngineError('INVALID_CONTENT_TYPE');
+  }
 }
 export function checkDb(error: { message: string } | null) {
   if (!error) return;
@@ -28,7 +50,7 @@ export async function trace(campaign: string, turn: string, stage: string, durat
 }
 export function failure(error: unknown) {
   const code = error instanceof EngineError ? error.code : 'INVALID_REQUEST';
-  const status = code === 'UNAUTHORIZED' ? 401 : code === 'NOT_FOUND' ? 404 : code === 'NOT_CONFIGURED' ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY','CAMPAIGN_ARCHIVED','RESET_ID_REUSED'].includes(code) ? 409 : 400;
+  const status = code === 'CROSS_ORIGIN_REQUEST' ? 403 : code === 'NOT_FOUND' ? 404 : code === 'NOT_CONFIGURED' ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY','CAMPAIGN_ARCHIVED','RESET_ID_REUSED','CAMPAIGN_LIMIT'].includes(code) ? 409 : 400;
   return Response.json({ error: code }, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 export async function readBody(request: Request) {

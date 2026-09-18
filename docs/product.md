@@ -6,13 +6,17 @@ Tell the DM what you attempt. The world responds consistently and remembers. The
 
 ## Phone-first navigation
 
-Four persistent destinations: **Story**, **Character**, **Journal**, **World**. Story is the home screen with generous readable text, recent actions, short committed change notes before narration, optional suggestions, and a multiline input. Enter keeps writing; an explicit button sends. Preserve input on failures. Display pending status accessibly and prevent duplicate submissions. Desktop adds breathing room without changing the interaction model.
+The home screen is a shared adventure lobby with a prominent **Start a new adventure** action and existing active/archived runs. No login or account creation intervenes. Inside an adventure, four persistent destinations: **Story**, **Character**, **Journal**, **World**. Story has generous readable text, recent actions, short committed change notes before narration, optional suggestions, and a multiline input. Enter keeps writing; an explicit button sends. Preserve input on failures. Display pending status accessibly and prevent duplicate submissions. Desktop adds breathing room without changing the interaction model.
 
 Character shows identity, condition, abilities, carried items and known relationships. Journal separates quests, discoveries and witnessed claims. World exposes discovered people/places and known rules only. Secrets stay server-side. A rumor is labeled a claim, not presented as an objective fact.
 
 ## Starting a campaign
 
-First slice: a seeded mystery at Ashford with a player-named character. Live mode accepts high-level premise and lore; seed facts constrain the opening. Broader AI-authored onboarding is tracked in the roadmap. Your adventures lists active and archived runs. Reset adventure starts again from the original seed on the same account; prior history is retained as a read-only archive. A separate browser-saved sample demonstrates mechanics without paid calls. It is prominently labeled “Scripted preview · No AI” and offers only preset buttons. Free-text roleplay is available only inside an AI campaign. A visible Start an AI adventure button opens sign-in; a new sign-in opens campaign creation or selection instead of leaving the player in the preview.
+First slice: a seeded mystery at Ashford. **Start a new adventure** starts a run immediately with defaults. Optional customization accepts a character name, high-level premise and lore; seed facts constrain the opening. Broader AI-authored onboarding is tracked in the roadmap.
+
+This is an **open shared playtest**. Every visitor can list, resume and act in any active adventure; runs are not private or tied to a browser/account. The Adventures lobby offers Continue and Delete controls. Reset is available within the selected active adventure. Reset starts again from the original seed and retains the prior run as a read-only archive. Delete requires confirmation, then permanently removes the selected run, its accepted turns and diagnostics. Reset does not imply deletion. Deleting one run does not delete another run created by an earlier reset.
+
+A separate in-browser preview demonstrates mechanics without paid calls. It is prominently labeled “Scripted preview · No AI” and offers only preset buttons. It is an optional destination, not the default entry into the product. Free-text roleplay is available inside an AI adventure without sign-in.
 
 ## A turn
 

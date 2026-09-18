@@ -8,7 +8,7 @@ export type SampleChoice = typeof suggestions[number];
 export function demoTurn(world: World, input: string, id: string): { world: World; turn?: PublicTurn; clarification?: string } {
   // Sample choices are authored scenes, not interpretations of free-form player intent.
   if (!suggestions.some(choice => choice === input)) {
-    return { world, clarification: 'This scripted sample only supports the displayed choices. Your action has not changed the story. Sign in and start a live adventure to use your own words.' };
+    return { world, clarification: 'This scripted sample only supports the displayed choices. Your action has not changed the story. Open Adventures and start a live adventure to use your own words. No login is needed.' };
   }
   const operations: Operation[] = [];
   const has = (id: string) => world.facts.some(f => f.id === id);

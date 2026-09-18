@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { authenticate, checkDb, failure, readBody, trace } from '@/server/db';
+import { database, campaignAccess, requireSameOrigin, checkDb, failure, readBody, trace } from '@/server/db';
 import { propose, PROMPT_VERSION } from '@/server/dm';
 import { ModelCallError } from '@/server/openrouter';
 import { reviewProposal } from '@/server/typesafe';
@@ -14,8 +14,9 @@ export async function POST(request: Request) {
   let candidate: Proposal | undefined;
   const start = performance.now();
   try {
-    const { db, owner } = await authenticate(request);
+    requireSameOrigin(request);
     const body = inputSchema.parse(await readBody(request));
+    const { db, owner } = await campaignAccess(body.campaignId);
     const { data, error } = await db.rpc('reserve_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId, p_input: body.input, p_revision: body.revision });
     checkDb(error);
     if (data.replayed) return Response.json({ turn: data.turn, replayed: true });
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   } catch (e) {
     if (acquired) {
       await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}) });
-      await authenticate(request).then(({ db }) => db.rpc('release_turn', { p_campaign: acquired!.campaign, p_owner: acquired!.owner, p_turn: acquired!.turn })).catch(() => undefined);
+      await Promise.resolve(database().rpc('release_turn', { p_campaign: acquired.campaign, p_owner: acquired.owner, p_turn: acquired.turn })).catch(() => undefined);
     }
     return failure(e);
   }

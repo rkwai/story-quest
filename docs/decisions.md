@@ -9,6 +9,11 @@
 - History is fixed; knowledge and claims are separate. Invent only undetermined details consistent with history.
 - World progression is driven by in-story time with bounded lazy development; no per-world cron jobs.
 - Always push verified work to production for this repository.
+- Current playtesting is open and shared: no login; anyone can start, resume, reset or delete any adventure. Start immediately with defaults; make customization optional. Reset preserves an archive; confirmed deletion removes the selected run and its history/traces. Raw world secrets and diagnostics remain server-only.
+
+## Open playtest decision (2026-09-18)
+
+Rick removed login as a product prerequisite and explicitly requested a shared list of in-progress adventures, continuation and deletion. This supersedes the earlier account-scoped onboarding and email setup requirements. The public lobby is intentional. Existing saves must remain accessible, and removing login must not expose secret state, provider credentials or diagnostic traces. Keep quotas, leases and atomic commits; do not create anonymous Auth accounts merely to preserve the old ownership shape.
 
 ## Implementation choices
 

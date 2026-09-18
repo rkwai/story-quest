@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { authenticate, checkDb, failure, readBody } from '@/server/db';
+import { campaignAccess, requireSameOrigin, checkDb, failure, readBody } from '@/server/db';
 import { OPENING } from '@/engine/seed';
 import { playerView } from '@/engine/view';
 import { EngineError, type World } from '@/engine/types';
@@ -9,8 +9,9 @@ const resetSchema = z.object({ campaignId: z.uuid(), resetId: z.uuid() });
 
 export async function POST(request: Request) {
   try {
-    const { db, owner } = await authenticate(request);
+    requireSameOrigin(request);
     const { campaignId, resetId } = resetSchema.parse(await readBody(request));
+    const { db, owner } = await campaignAccess(campaignId);
     const { data, error } = await db.rpc('reset_campaign', {
       p_campaign: campaignId, p_owner: owner, p_reset: resetId,
     });
