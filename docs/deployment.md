@@ -58,3 +58,8 @@ In [Supabase Auth URL configuration](https://supabase.com/dashboard/project/cpyb
 After configuration, redeploy so public keys are included in the client build. `GET /api/health` reports only required-value presence as booleans (200 configured, 503 missing), with no-store caching and no external calls. It exposes no keys, URLs, provider responses or campaign data. It does **not** validate credentials, project linking, Auth redirects or model credits. Then test sign-in, create campaign, commit a turn, complete narration, reload, inspect traces and confirm hidden facts remain server-only. Live availability requires the three Supabase values and OPENROUTER_API_KEY; model settings have built-in defaults. Hosted auth and a real paid model turn remain unverified. Jev launched on OpenRouter on September 18; both model roles now use one OpenRouter key. The former TYPESAFE_API_KEY setting is no longer used.
 
 Package engines now pins Node 22.x, matching CI, because the initial Vercel deployment selected Node 24 from the former >=22 range.
+
+
+## Reset release — September 18
+
+Commit `30835ac` adds account-preserving campaign reset, archived history and the one-time verification ledger. Hosted migrations `20260918023239_verification_runs` and `20260918023311_campaign_reset` are applied; migration filenames match production. Deployment `dpl_DDXEMNp2Uk9H8iCUE8hubU3FVihb` is READY. TypeScript, 33 regression tests and production build pass. The opted-in live test through a temporary build hook was rejected again by automatic approval review; the normal `npm run build` configuration remains active and the real-model flow remains unverified.
