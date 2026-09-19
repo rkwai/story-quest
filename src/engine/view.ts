@@ -30,6 +30,9 @@ export function publicChanges(before: World, after: World): string[] {
   if (a.character.location !== b.character.location) changes.push(`You arrive at ${b.character.location}.`);
   for (const item of b.character.possessions) if (!a.character.possessions.includes(item)) changes.push(`Acquired: ${item}.`);
   for (const item of a.character.possessions) if (!b.character.possessions.includes(item)) changes.push(`No longer carried: ${item}.`);
-  if (before.minute !== after.minute) changes.push(`${after.minute - before.minute} minutes pass.`);
+  if (before.minute !== after.minute) {
+    const elapsed = after.minute - before.minute;
+    changes.push(elapsed === 1 ? '1 minute passes.' : `${elapsed} minutes pass.`);
+  }
   return changes;
 }

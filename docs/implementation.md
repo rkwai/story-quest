@@ -18,6 +18,10 @@ Rick authorized up to five focused playtest rounds with fixes and production rel
 
 Hosted lifecycle checks also confirm reset creates a fresh seed-based run, archives the prior run without losing its failed-attempt trace, and opens archived history without an action composer. A fresh browser tab sees the same shared adventures. Delete confirmation and cancellation work; permanent hosted deletion has not been exercised. Existing player data was not removed.
 
+Playtest rounds 2–4 on production commit `48500a2` (`dpl_Ba3u21pHbt8ypSiRJRvrnX19ndTx`, READY; CI passed): the original question produced a relevant answer recorded as testimony; after reload, “Whose eyes?” correctly continued that dialogue; inspecting the lantern without taking or lighting it preserved its owner and unlit condition while establishing observable details. Revisions advanced exactly once to 1, 2 and 3. DeepSeek proposal/narration and Jev advisory calls all completed. Provider-reported costs were $0.000771996, $0.001169802 and $0.003082698 respectively; commit-plus-narration timings were approximately 11.3, 15.3 and 22.4 seconds. These are three successful state transitions, not proof of general story consistency.
+
+Round 4 narration added an unsupported decorative explanation that a thumb wore down a mark. That explanation was not committed as truth. Prompt `dm-1.2.1` explicitly prohibits inventing the causes of observed details or hidden motives, and the singular elapsed-time wording is corrected. Existing recorded prose is preserved. The final round will exercise a scheduled dusk event on this update; semantic prose validation and long-campaign evaluation remain future work.
+
 ## Phase 0 — Product contract and repository reset
 
 - [x] Capture agreed experience, authority/knowledge boundaries and lazy world evolution.
