@@ -11,7 +11,7 @@ Current playtest mode is **open and shared**: no account or sign-in is required.
 ## Work and release
 
 - Implement small complete slices. Update docs/implementation.md with actual outcomes and next steps.
-- Rick explicitly says **always push to production for this repo**. After verification, commit and push master, deploy Vercel, check the live result, and continue authorized work. Routine release approval is already given.
+- Rick explicitly says **always push to production for this repo**. After verification, commit and push master, watch the native Git-triggered Vercel deployment, check the live result, and continue authorized work. Verify that the production alias serves the pushed commit; avoid duplicate manual deployments. Routine release approval is already given.
 - Never force-push, expose secrets, or substitute a different provider to bypass missing access. Rick authorizes a confirmed Delete adventure capability for the shared lobby; do not delete existing user runs yourself during implementation or verification.
 - Reset archives a run and starts from its stored seed, preserving old history/traces. Confirmed Delete permanently removes the selected run, accepted turns and traces. Keep these actions distinct. Retain any existing QA account; open playtesting no longer requires one.
 - Paid playtests are explicitly opt-in, claimed once by a durable run UUID, and never part of normal builds. The existing auth-based verify:live script is legacy; do not use it as acceptance for the open lobby or attach it to a deployment build hook.
