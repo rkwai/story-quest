@@ -14,7 +14,7 @@ Rick explicitly authorizes production pushes for this repo. After meaningful ver
 
 ## Git-triggered releases
 
-Rick reported connecting Vercel to GitHub on September 19, 2026. Use native Git deployment from `rkwai/story-quest`, production branch `master`, repository root `.`, Next.js preset, Node 22, install command `npm ci` and build command `npm run build`. A repository connection alone does not prove a production release: after pushing, check that Vercel creates a Git deployment for the exact commit and that the production alias serves it. This documentation push is the first trigger check after the connection; record the observed result in implementation.md.
+Native Git production deployment is verified as of September 19, 2026: commit `7eb41b9720fcda090c11b0a970a8f03a604f4894` triggered deployment `dpl_G1WuHghNxRNukRR9xvjyph43PTua`, reached READY, and received the production alias https://story-quest-seven.vercel.app. GitHub CI passed for the commit. Use `rkwai/story-quest`, production branch `master`, repository root `.`, Next.js preset, Node 22, install command `npm ci` and build command `npm run build`. Check the exact commit, deployment status and alias after each push; earlier manual-deployment instructions below are historical.
 
 GitHub Actions runs typecheck, tests and build. The agent must run checks before pushing because an automatic Vercel deployment can start before CI finishes. Watch the Git-triggered deployment rather than starting a duplicate manual release. When credentials are available, Supabase migrations precede a release requiring new schema. Apply additive migrations first; never run the old Sequelize seed against Supabase.
 

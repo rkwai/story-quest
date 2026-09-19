@@ -4,6 +4,10 @@ import { propose, narrate } from '../src/server/dm';
 import { ModelCallError } from '../src/server/openrouter';
 import { seedWorld } from '../src/engine/seed';
 import { playerView } from '../src/engine/view';
+import { applyProposal } from '../src/engine/reducer';
+import { buildContext } from '../src/engine/context';
+import { proposalSchema } from '../src/engine/types';
+import duplicateDialogue from './fixtures/dialogue-duplicate-proposal.json';
 
 const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [] };
 function config(t: TestContext) {
@@ -115,4 +119,48 @@ test('an OpenRouter key alone uses the accepted DeepSeek defaults for both stage
   await narrate(playerView(seedWorld()), { id: 'defaults', input: 'Wait', interpretation: 'Wait', changes: [], narration: null, revision: 1 });
   assert.deepEqual(requests.map(body => body.model), ['deepseek/deepseek-v4.1-flash', 'deepseek/deepseek-v4.1-flash']);
   assert.deepEqual(requests.map(body => body.reasoning), [{ effort: 'low', exclude: true }, { effort: 'none', exclude: true }]);
+});
+
+test('the recorded live dialogue failure is rejected atomically without silently deduplicating model output', async t => {
+  config(t);
+  t.mock.method(globalThis, 'fetch', async () => Response.json(envelope(JSON.stringify(duplicateDialogue))));
+  const world = seedWorld();
+  const original = structuredClone(world);
+  const input = 'I ask the woman, "What are you doing in this desolate area?"';
+  const answer = await propose(buildContext(world, input).state, input);
+  // The defect is semantic: this response fits the transport schema, but must
+  // never be accepted or repaired by deleting inconvenient operations.
+  assert.deepEqual(proposalSchema.parse(answer.data), duplicateDialogue);
+  assert.equal(answer.data.operations.length, 3);
+  assert.throws(() => applyProposal(world, answer.data), /DUPLICATE_ID/);
+  assert.deepEqual(world, original);
+});
+
+test('an NPC answer is recorded as testimony with the original player question and no invented answer entity', async t => {
+  config(t);
+  const input = 'I ask the woman, "What are you doing in this desolate area?"';
+  const reply = 'I keep watch here in case someone returns looking for their family.';
+  const world = seedWorld();
+  const context = { ...buildContext(world, input).state, recentTurns: [{ input: 'I approach her.', narration: 'You stand beneath the arch.' }] };
+  const dialogue = { kind: 'action', interpretation: 'You ask the woman why she remains here.', clarification: null, elapsedMinutes: 1,
+    operations: [{ op: 'add_claim', claim: { id: 'mara_reason_1', speakerId: 'mara', text: reply, knownBy: ['player', 'mara'] } }] };
+  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
+    const body = JSON.parse(options.body as string);
+    const supplied = JSON.parse(body.messages[1].content);
+    assert.equal(supplied.input, input);
+    assert.deepEqual(supplied.state.recentTurns, context.recentTurns);
+    assert.equal(body.response_format.json_schema.strict, true);
+    const branches = body.response_format.json_schema.schema.properties.operations.items.oneOf;
+    assert.ok(branches.some((branch: { properties: { op: { const: string } } }) => branch.properties.op.const === 'add_claim'));
+    assert.match(body.messages[0].content, /An answer, utterance, memory, relationship, motive or event is NOT an entity or faction/);
+    return Response.json(envelope(JSON.stringify(dialogue)));
+  });
+  const result = await propose(context, input);
+  const after = applyProposal(world, result.data);
+  assert.deepEqual(after.entities, world.entities);
+  assert.deepEqual(after.facts, world.facts);
+  assert.equal(after.claims.length, 1);
+  assert.equal(playerView(after).claims[0].text, reply);
+  assert.equal(playerView(after).claims[0].speaker, 'The woman at the arch');
+  assert.equal(after.revision, world.revision + 1);
 });

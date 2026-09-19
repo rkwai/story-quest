@@ -1,6 +1,6 @@
 # Implementation plan and status
 
-Updated: 2026-09-18. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-09-19. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
 ## Current delivery — open shared playtest (2026-09-18)
 
@@ -8,7 +8,15 @@ Rick explicitly removed login and requested that anyone be able to start, resume
 
 The implementation preserves the engine and knowledge boundary: routes resolve an existing campaign’s internal quota scope server-side, new runs use a shared scope, and raw tables/RPCs remain private. The historical owner UUID is decoupled from `auth.users` and retained as an internal request-limit/serialization key. Reset continues to archive; confirmed Delete removes one run and its accepted turns/traces. Existing user runs are not removed as part of this release.
 
-Verification: TypeScript, all 40 regression tests and the production build pass. Tests cover no-login create/list/resume/delete routes, preservation of existing saves, private state filtering, shared quotas, active-lease deletion guards, deletion cascade, reset descendants and verification-ledger retention. Migration `20260918220546_open_playtest_lobby` is applied in Supabase; its filename matches the hosted version. A hosted query confirms one shared scope and no browser-role access to raw state, traces or delete RPCs. Security advisor has only six intentional informational RLS-without-policy notices on private tables. Hosted browser checks follow deployment. The phone browser scenarios were updated but not executed in this pass; real model dialogue remains unverified. The auth-based verify:live script is legacy and is not the acceptance gate for open mode. Normal builds must never invoke a paid playtest.
+Verification: TypeScript, all 40 regression tests and the production build pass. Tests cover no-login create/list/resume/delete routes, preservation of existing saves, private state filtering, shared quotas, active-lease deletion guards, deletion cascade, reset descendants and verification-ledger retention. Migration `20260918220546_open_playtest_lobby` is applied in Supabase; its filename matches the hosted version. A hosted query confirms one shared scope and no browser-role access to raw state, traces or delete RPCs. Security advisor has only six intentional informational RLS-without-policy notices on private tables. Hosted browser verification now confirms no-login default creation, reload and Continue. The phone browser scenarios were updated but not executed in this pass. The auth-based verify:live script is legacy and is not the acceptance gate for open mode. Normal builds must never invoke a paid playtest.
+
+Git production verification (September 19): commit `7eb41b9720fcda090c11b0a970a8f03a604f4894` triggered `dpl_G1WuHghNxRNukRR9xvjyph43PTua`, reached READY and serves https://story-quest-seven.vercel.app; GitHub CI passed. Native Git releases are now operational.
+
+First real AI dialogue attempt: DeepSeek V4.1 Flash, served by Wafer, proposed three `create_entity` operations with the same `mara_answer` ID. The engine rejected `DUPLICATE_ID` before commitment; revision remained 0. The proposal took 6.857 seconds and reported $0.000727 cost. No Jev review or narration ran. Private verification run `f7c1f6cf-a34d-4b62-a736-4c0a4a8b9b8e` remains recorded as failed. This verifies safe rejection, not a successful storytelling turn.
+
+Rick authorized up to five focused playtest rounds with fixes and production releases between rounds. Prompt `dm-1.2.0` now documents operation semantics and records NPC answers as testimony, with a regression fixture for the exact rejected duplicate proposal. The DM receives up to four recent public turns within a 6,000-character conversation budget and the overall 24,000-character state budget; narration is explicitly not authoritative truth. Scene context now includes local NPC possessions and referenced entities. Rejected proposals show a useful error while preserving the player's input. Archived runs have accurate read-only copy. TypeScript, the production build, 42 existing/provider tests and four new conversation tests pass. The model behavior still needs a hosted retest after this release.
+
+Hosted lifecycle checks also confirm reset creates a fresh seed-based run, archives the prior run without losing its failed-attempt trace, and opens archived history without an action composer. A fresh browser tab sees the same shared adventures. Delete confirmation and cancellation work; permanent hosted deletion has not been exercised. Existing player data was not removed.
 
 ## Phase 0 — Product contract and repository reset
 

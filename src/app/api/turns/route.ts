@@ -3,6 +3,7 @@ import { database, campaignAccess, requireSameOrigin, checkDb, failure, readBody
 import { propose, PROMPT_VERSION } from '@/server/dm';
 import { ModelCallError } from '@/server/openrouter';
 import { reviewProposal } from '@/server/typesafe';
+import { recentConversation } from '@/server/conversation';
 import { buildContext } from '@/engine/context';
 import { applyProposal } from '@/engine/reducer';
 import { playerView, publicChanges } from '@/engine/view';
@@ -22,7 +23,8 @@ export async function POST(request: Request) {
     if (data.replayed) return Response.json({ turn: data.turn, replayed: true });
     acquired = { campaign: body.campaignId, owner, turn: body.turnId };
     const before = data.state as World;
-    const context = buildContext(before, body.input);
+    const recentTurns = await recentConversation(db, body.campaignId, before.revision);
+    const context = buildContext(before, body.input, 24000, recentTurns);
     await trace(body.campaignId, body.turnId, 'context', performance.now()-start, { ...context.manifest, revision: before.revision, engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION });
     const answer = await propose(context.state, body.input);
     await trace(body.campaignId, body.turnId, 'proposal', answer.metrics.durationMs, answer.metrics);

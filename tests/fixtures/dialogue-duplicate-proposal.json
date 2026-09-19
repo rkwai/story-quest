@@ -1,0 +1,47 @@
+{
+  "kind": "action",
+  "operations": [
+    {
+      "op": "create_entity",
+      "entity": {
+        "id": "mara_answer",
+        "kind": "faction",
+        "name": "Mara's answer",
+        "knownBy": ["player", "mara"],
+        "ownerId": null,
+        "condition": "remembered",
+        "locationId": "ashford",
+        "description": "A spoken statement from Mara about why she remains in Ashford."
+      }
+    },
+    {
+      "op": "create_entity",
+      "entity": {
+        "id": "mara_answer",
+        "kind": "faction",
+        "name": "Mara's answer",
+        "knownBy": ["player", "mara"],
+        "ownerId": null,
+        "condition": "remembered",
+        "locationId": "ashford",
+        "description": "A spoken statement from Mara about why she remains in Ashford."
+      }
+    },
+    {
+      "op": "create_entity",
+      "entity": {
+        "id": "mara_answer",
+        "kind": "faction",
+        "name": "Mara's answer",
+        "knownBy": ["player", "mara"],
+        "ownerId": null,
+        "condition": "remembered",
+        "locationId": "ashford",
+        "description": "A spoken statement from Mara about why she remains in Ashford."
+      }
+    }
+  ],
+  "clarification": null,
+  "elapsedMinutes": 1,
+  "interpretation": "Rowan asks Mara what keeps her here in the ruined town."
+}

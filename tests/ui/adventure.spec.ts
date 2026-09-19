@@ -112,3 +112,23 @@ test('scripted preview is secondary and separates claims from world facts',async
   await expect(page.getByText('Weathered notebook')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
+
+test('a rejected AI proposal explains the failure and keeps the player action without retrying',async({page})=>{
+  await mockCampaigns(page,true);
+  let attempts=0;
+  await page.route('**/api/turns',async route=>{
+    attempts+=1;
+    await route.fulfill({status:400,json:{error:'DUPLICATE_ID'}});
+  });
+  await page.goto('/');
+  await page.getByRole('button',{name:'Continue adventure',exact:true}).click();
+  const action='I ask the woman what she is doing in this desolate area.';
+  await page.getByRole('textbox',{name:'Your action'}).fill(action);
+  await page.getByRole('button',{name:'Send action',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('The AI’s response could not be applied consistently. Your world is unchanged, and your text is kept.');
+  await expect(page.getByRole('status')).toContainText('Reference: DUPLICATE_ID.');
+  await expect(page.getByRole('textbox',{name:'Your action'})).toHaveValue(action);
+  await expect(page.getByRole('button',{name:'Send action',exact:true})).toBeEnabled();
+  await expect(page.getByText(`Your attempt: ${action}`,{exact:true})).toHaveCount(0);
+  expect(attempts).toBe(1);
+});

@@ -13,10 +13,21 @@ const DEFAULT_PREMISE = 'A quiet fantasy world where old promises carry weight. 
 const resetKey = (id:string) => `storyquest.reset.${id}`;
 const pendingKey = (id:string) => `storyquest.pending.${id}`;
 const missingCampaign = (code:string) => ['NOT_FOUND','CAMPAIGN_NOT_FOUND','CAMPAIGN_DELETED'].includes(code);
+// These failures come from validating a model proposal before a world commit.
+// Do not tell the player that their natural-language action was invalid.
+const proposalRejectionCodes = new Set([
+  'INVALID_PROPOSAL','INVALID_CLARIFICATION','ACTION_HAS_CLARIFICATION',
+  'UNKNOWN_ENTITY','DUPLICATE_ID','INVALID_OBSERVER','INVALID_CONDITION',
+  'ESTABLISHED_FACT','FUTURE_FACT','UNKNOWN_FACT','INVALID_NEW_QUEST',
+  'UNKNOWN_QUEST','QUEST_ALREADY_RESOLVED','INVALID_DEADLINE',
+  'UNKNOWN_PENDING_EVENT','EVENT_WITHOUT_OUTCOME','INVALID_EVENT_OUTCOME',
+  'INVALID_LOCATION','INVALID_OWNER','ITEM_TWO_LOCATIONS','INVALID_SPEAKER',
+  'UNRESOLVED_DEADLINE','INVALID_PLAYER',
+]);
 const messages: Record<string,string> = {
   MODEL_UNAVAILABLE: 'The storyteller is taking a moment. Your action has not been applied. Please try again.',
   MODEL_INCOMPLETE: 'The storyteller could not finish that turn. Your world is unchanged.',
-  MODEL_INVALID_OUTPUT: 'That turn could not be resolved consistently. Your world is unchanged. Try again or rephrase.',
+  MODEL_INVALID_OUTPUT: 'The AI response could not be applied consistently. Your world is unchanged, and your text is kept. You can try sending it again.',
   STALE_REVISION: 'Another player advanced this adventure. The latest chapter is now loaded; review it before trying again.',
   TURN_BUSY: 'Another turn is still being resolved. Please wait a moment.',
   NARRATION_BUSY: 'The storyteller is finishing a passage. Please try again in a moment.',
@@ -238,6 +249,8 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           if (missingCampaign((loadError as Error).message)) { clearCampaign(id); setLobbyMessage('That adventure was deleted. Choose another or start a new one.'); await refreshCampaigns(); }
           else setNotice('The adventure changed, but its latest chapter could not be loaded. Open Adventures to reload it before trying again.');
         }
+      } else if (proposalRejectionCodes.has(code)) {
+        setNotice(`The AI’s response could not be applied consistently. Your world is unchanged, and your text is kept. You can try sending it again. Reference: ${code}.`);
       } else setNotice(messages[code] ?? 'That action could not be completed. Your text is kept; try again.');
     } finally { setBusy(false); submitting.current=false; setPhase(''); }
   }
@@ -280,7 +293,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
       <div className="preview-entry"><p>Just looking around?</p><button className="text-button" disabled={busy||!ready} onClick={openSample}>Explore scripted preview · No AI</button></div>
     </main> : <>
     <div className="page-heading"><div><p className="eyebrow">{mode==='sample'?'SCRIPTED PREVIEW · NO AI':archived?'A PREVIOUS ADVENTURE':'AI ADVENTURE · SHARED PLAYTEST'}</p><h1>{view.title}</h1><p className="subheading">{mode==='sample'?'Three prewritten scenes to explore the interface.':'Speak in your own words. The world remembers.'}</p></div><span className="save-indicator"><span/>{mode==='sample'?'Preview only':archived?'History preserved':busy?'Saving your next chapter…':'Saved automatically'}</span></div>
-    {mode==='sample'?<section className="mode-notice" aria-label="Play mode"><div><h2>This is a scripted preview</h2><p>Its three choices play prewritten scenes. Open Adventures to start a real AI story with no login.</p></div><button className="primary" disabled={busy} onClick={showLobby}>Open adventures</button></section>:<p className="shared-story-note">Shared playtest · Saved automatically · Anyone can continue this adventure.</p>}
+    {mode==='sample'?<section className="mode-notice" aria-label="Play mode"><div><h2>This is a scripted preview</h2><p>Its three choices play prewritten scenes. Open Adventures to start a real AI story with no login.</p></div><button className="primary" disabled={busy} onClick={showLobby}>Open adventures</button></section>:<p className="shared-story-note">{archived?'Shared playtest · Read-only history · This previous run is preserved.':'Shared playtest · Saved automatically · Anyone can continue this adventure.'}</p>}
     <nav className="bottom-nav" aria-label="Adventure navigation">{(['Story','Character','Journal','World'] as Tab[]).map(item=><button key={item} aria-current={tab===item?'page':undefined} onClick={()=>setTab(item)}><Icon name={item}/><span>{item}</span>{item==='Journal'&&view.quests.some(quest=>quest.status==='active')&&<i/>}</button>)}</nav>
     <div className="workspace"><main className="main-panel">
       <div className="chapter-bar"><span><span className="chapter-dot"/>{tab==='Story'?'CHAPTER I · THE ARRIVAL':tab.toUpperCase()}</span><span>{storyTime(view.minute)}</span></div>
