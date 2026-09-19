@@ -1,0 +1,17 @@
+{
+  "case": "A witnessed scheduled move must not introduce a private NPC name",
+  "input": "I wait beneath the arch until dusk, watching where the woman goes.",
+  "playerKnownName": "The woman at the arch",
+  "privateEntityId": "mara",
+  "privateDescription": "Her name is Mara. She keeps watch over the ruins.",
+  "scheduledDescription": "At dusk, Mara leaves the exposed arch and takes shelter in the bell tower.",
+  "observedPublicFact": "As dusk fell over Ashford, Mara left the exposed arch where she had been keeping watch and crossed the broken ground to take shelter inside the intact bell tower, the unlit lantern still in her hand.",
+  "expected": {
+    "eventResolved": true,
+    "npcLocation": "tower",
+    "referToNpcAs": "the woman",
+    "mustNotRevealNameBeforeIntroduction": "Mara"
+  },
+  "status": "Live failure captured. Prompt guidance updated; semantic visibility enforcement and a paid retest remain outstanding.",
+  "verificationRunId": "c080cd45-0e0a-46c5-8c77-d738f958bffe"
+}
