@@ -63,6 +63,8 @@ The narration prompt may add sensory connective prose but must not invent conseq
 
 Default bounds: 2,000 input characters, 24,000 context characters, 20 operations, 720 in-story minutes, 1 proposal + 1 narration call on the normal path, with at most one explicit narration retry per accepted turn. No calls on inactivity. Provider token counts, model/version, prompt version, stage duration and selected context IDs are logged. OpenRouter-reported cost, served model/provider and generation IDs are recorded through a metadata allowlist; missing costs stay null. Raw provider errors and reasoning are excluded. TypeSafe adds at most one 4-second shadow call per proposal, with no retries. Its resolved model, finite probabilities and usage are logged privately; it cannot commit or veto state.
 
+The world-change proposal has a 120-second request deadline, inside a 150-second Vercel turn route and a 180-second reservation lease. Narration retains its separate 45-second deadline. This prevents the old 45-second cutoff from discarding slow responses while keeping one proposal per attempt; the model and context budgets are unchanged. A new adventure skips its empty history query.
+
 Two sequential model stages are intentional: narration cannot precede commitment. A visible committed outcome prevents a narration delay from making the game appear lost. Later optimize with streaming narration and measured caching, not speculative world mutation.
 
 ## First-slice limits

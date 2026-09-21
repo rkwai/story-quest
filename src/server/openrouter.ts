@@ -2,6 +2,8 @@ import { EngineError } from '@/engine/types';
 
 export type ModelStage = 'proposal' | 'narration';
 const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash';
+// Keep proposal < turn route (150s) < reservation lease (180s).
+const MODEL_TIMEOUT_MS: Record<ModelStage, number> = { proposal: 120_000, narration: 45_000 };
 export class ModelCallError extends EngineError {
   constructor(code: string, public metrics: Record<string, unknown>) { super(code); }
 }
@@ -28,12 +30,16 @@ export async function generate(stage: ModelStage, system: string, content: unkno
     || (model === DEFAULT_MODEL ? stage === 'proposal' ? 'low' : 'none' : undefined);
   if (effort && !['none','minimal','low','medium','high','xhigh'].includes(effort)) throw new EngineError('NOT_CONFIGURED');
   const started = performance.now();
-  const metrics: Record<string, unknown> = { generationId: crypto.randomUUID(), provider: 'openrouter', stage, requestedModel: model, promptVersion, reasoningEffort: effort || 'provider_default' };
-  const fail = (code: string): never => { throw new ModelCallError(code, { ...metrics, durationMs: Math.round(performance.now() - started) }); };
+  const timeoutMs = MODEL_TIMEOUT_MS[stage];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new DOMException('Model deadline exceeded', 'TimeoutError')), timeoutMs);
+  let responsePhase: 'headers' | 'body' = 'headers';
+  const metrics: Record<string, unknown> = { generationId: crypto.randomUUID(), provider: 'openrouter', stage, requestedModel: model, promptVersion, reasoningEffort: effort || 'provider_default', timeoutMs };
+  const fail = (code: string, failureKind: string): never => { throw new ModelCallError(code, { ...metrics, failureKind, responsePhase, durationMs: Math.round(performance.now() - started) }); };
   let payload;
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST', signal: AbortSignal.timeout(45000),
+      method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://story-quest-seven.vercel.app', 'X-OpenRouter-Title': 'StoryQuest' },
       body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(content) }],
         max_tokens: maxTokens, stream: false, provider: { require_parameters: true },
@@ -41,19 +47,26 @@ export async function generate(stage: ModelStage, system: string, content: unkno
         ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: 'storyquest_proposal', strict: true, schema } } } : {}) })
     });
     metrics.httpStatus = response.status;
-    if (!response.ok) return fail('MODEL_UNAVAILABLE');
+    metrics.headersMs = Math.round(performance.now() - started);
+    if (!response.ok) return fail('MODEL_UNAVAILABLE', 'http');
+    responsePhase = 'body';
     payload = await response.json();
   } catch (error) {
     if (error instanceof ModelCallError) throw error;
-    return fail('MODEL_UNAVAILABLE');
+    if (controller.signal.aborted) return fail('MODEL_TIMEOUT', 'timeout');
+    return fail('MODEL_UNAVAILABLE', error instanceof SyntaxError ? 'invalid_json' : 'network');
+  } finally {
+    // The same deadline covers headers AND the complete body; completed calls
+    // must not leave a timer running or trigger another paid generation.
+    clearTimeout(timeout);
   }
   metrics.model = label(payload?.model);
   metrics.servedBy = label(payload?.provider);
   metrics.providerGenerationId = label(payload?.id);
   metrics.usage = usageMetrics(payload?.usage);
   const answer = payload?.choices?.[0];
-  if (payload?.error) return fail('MODEL_UNAVAILABLE');
+  if (payload?.error) return fail('MODEL_UNAVAILABLE', 'provider');
   metrics.finishReason = label(answer?.finish_reason);
-  if (answer?.finish_reason !== 'stop' || typeof answer.message?.content !== 'string' || !answer.message.content.trim()) return fail('MODEL_INCOMPLETE');
+  if (answer?.finish_reason !== 'stop' || typeof answer.message?.content !== 'string' || !answer.message.content.trim()) return fail('MODEL_INCOMPLETE', 'incomplete');
   return { text: answer.message.content.trim(), metrics: { ...metrics, durationMs: Math.round(performance.now() - started) } };
 }

@@ -26,6 +26,16 @@ select turn_id, stage, details from public.turn_traces
 where campaign_id = '<campaign UUID>' order by created_at;
 ```
 
+## World-planning deadlines
+
+Keep these budgets coordinated: proposal 120 seconds, `/api/turns` 150 seconds, turn reservation 180 seconds. The route export and first exact-match rule in `vercel.json` both set 150. The 30-second margins leave room for context reads, validation, the bounded Jev review and saving, and prevent a second visitor taking over a still-running request. Other routes retain their 60-second configuration; narration calls remain 45 seconds and Jev four seconds. A platform-killed request can leave a busy lease until expiry; handled proposal failures release it.
+
+Apply `longer_proposal_lease` before deploying the application change. It only replaces the reservation function and preserves its guards, shared quota and private grants. Existing active leases are left alone. Application rollback is safe with the longer lease; keep the forward migration and saved history. Fresh migrations and tests must run in timestamp order.
+
+For failures inspect `details.modelCall` on the private `failed` trace: `timeoutMs`, `failureKind`, `responsePhase`, `headersMs`, `httpStatus` and `durationMs`. An HTTP 200 plus `failureKind=timeout` and `responsePhase=body` means headers arrived but the complete JSON response exceeded the deadline. `MODEL_TIMEOUT` is HTTP 504, while provider-unavailable errors are 503. Missing provider usage/cost remains unknown, not zero. Hard platform termination can still prevent final trace persistence.
+
+There is one proposal generation per attempt and no automatic paid retry, speculative generation or premium routing. The same model, reasoning effort, token cap and context apply. The first turn skips an empty history query; this saves a database round trip, not the model's generation time. A longer wait may still consume provisioned memory and provider tokens; compare completed-attempt cost and retry frequency rather than promising zero cost or faster model execution. [Vercel duration and billing behavior](https://vercel.com/docs/functions/configuring-functions/duration).
+
 ## Maintenance cadence (human-triggered; no gameplay cron)
 
 Weekly during active development: review rejected turns, failed narration, context overflow, p95 latency and usage. After every continuity report: add a labeled regression. Before a model change: run the fixed scenario set and a multi-turn campaign. Before a schema change: test migration on disposable PostgreSQL, replay representative saves, and plan rollback.

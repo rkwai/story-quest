@@ -26,6 +26,7 @@ export function sanitizeConversation(rows: readonly unknown[], throughRevision: 
 export async function recentConversation(db: ReturnType<typeof database>, campaignId: string, throughRevision: number): Promise<RecentPublicTurn[]> {
   // Revision N is the reserved world's latest committed turn; this request will
   // become N+1. Do not include later turns, uncommitted attempts, or private data.
+  if (throughRevision === 0) return [];
   const { data, error } = await db.from('turns').select('public_result,narration')
     .eq('campaign_id', campaignId).eq('status', 'committed').lte('revision', throughRevision)
     .order('revision', { ascending: false }).limit(CONVERSATION_TURN_LIMIT);

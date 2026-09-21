@@ -25,6 +25,7 @@ const proposalRejectionCodes = new Set([
   'UNRESOLVED_DEADLINE','INVALID_PLAYER',
 ]);
 const messages: Record<string,string> = {
+  MODEL_TIMEOUT: 'The world update took too long. Your action has not been applied, and your text is kept. You can try sending it again.',
   MODEL_UNAVAILABLE: 'The storyteller is taking a moment. Your action has not been applied. Please try again.',
   MODEL_INCOMPLETE: 'The storyteller could not finish that turn. Your world is unchanged.',
   MODEL_INVALID_OUTPUT: 'The AI response could not be applied consistently. Your world is unchanged, and your text is kept. You can try sending it again.',

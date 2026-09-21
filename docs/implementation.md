@@ -26,6 +26,16 @@ Round 5 on `6af0aa0` correctly advanced to minute 1080, moved the woman to the t
 
 Five paid attempts cost a provider-reported $0.008250946 total. TypeScript, all 46 regression tests and the build pass for the final prompt update. Hosted reset of the four-turn run preserved all four turns and 20 traces and created a fresh run identical to its stored seed. The original failed run and its three traces also remain. See [the full playtest report](playtest-2026-09-19.md) for coverage, timings and remaining checks. Continue with the undiscovered-name acceptance case before expanding the campaign test set; do not claim five clean passes.
 
+## World-planning timeout update — September 21, 2026
+
+The latest reported playthrough had five failed attempts at roughly 45.3 seconds, all after OpenRouter HTTP 200 headers and before a complete body. Seven accepted turns and their narrations were saved; Jev reviews averaged about 0.2 seconds. This points to the application's former 45-second proposal cutoff, not a slow deterministic reducer.
+
+Proposal requests now have a 120-second deadline across headers and body, with a 150-second turn route and 180-second database reservation. Narration remains 45 seconds, and Jev remains at most four seconds. New adventures skip the impossible prior-conversation query; established adventures retain their complete existing context-selection rules. No model, effort, token budget, routing preference or automatic retry was added or changed.
+
+Private model metrics now distinguish timeout, HTTP, network, invalid JSON and provider failures, record the configured deadline and header-arrival time, and identify whether a failure was waiting for headers or body. Timeouts return a safe HTTP 504 with the input preserved; other provider-unavailable errors return 503. A failed proposal releases its lease and cannot commit state.
+
+Verification is pending on the isolated branch. The new regression cases simulate a 90-second successful response, timeout before headers, a stalled HTTP 200 body, unchanged narration limits, timeout cleanup without commit, and concurrent/reset/delete protection 135 seconds into a reservation. All model responses are mocked; no paid playtest or claim of measured live latency improvement is part of this change. Apply the additive `longer_proposal_lease` migration before deploying the longer request deadline.
+
 ## Phase 0 — Product contract and repository reset
 
 - [x] Capture agreed experience, authority/knowledge boundaries and lazy world evolution.

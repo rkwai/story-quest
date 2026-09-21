@@ -8,7 +8,8 @@ import { buildContext } from '@/engine/context';
 import { applyProposal } from '@/engine/reducer';
 import { playerView, publicChanges } from '@/engine/view';
 import { ENGINE_VERSION, EngineError, type World, type PublicTurn, type Proposal } from '@/engine/types';
-export const maxDuration = 60;
+// Includes the 120s proposal deadline, advisory review and persistence margin.
+export const maxDuration = 150;
 const inputSchema = z.object({ campaignId: z.uuid(), turnId: z.uuid(), revision: z.number().int().min(0), input: z.string().trim().min(1).max(2000) });
 export async function POST(request: Request) {
   let acquired: { campaign: string; owner: string; turn: string } | undefined;

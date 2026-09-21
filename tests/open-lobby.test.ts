@@ -21,9 +21,11 @@ test('open lobby migration preserves existing saves while sharing safe listings 
     await db.exec('create schema auth; create table auth.users(id uuid primary key); create role anon; create role authenticated; create role service_role bypassrls;');
     await db.query('insert into auth.users values($1)', [originalOwner]);
     const files = (await readdir('supabase/migrations')).filter(file => file.endsWith('.sql')).sort();
-    for (const file of files.filter(file => !file.endsWith('_open_playtest_lobby.sql'))) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
+    const lobbyIndex = files.findIndex(file => file.endsWith('_open_playtest_lobby.sql'));
+    assert.ok(lobbyIndex >= 0);
+    for (const file of files.slice(0, lobbyIndex)) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
     const existing = (await db.query<{ id: string }>('select public.create_campaign($1,$2,$3) as id', [originalOwner, seed.title, JSON.stringify(seed)])).rows[0].id;
-    await db.exec(await readFile(`supabase/migrations/${files.find(file => file.endsWith('_open_playtest_lobby.sql'))}`, 'utf8'));
+    for (const file of files.slice(lobbyIndex)) await db.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
     const scope = (await db.query<{ id: string }>('select id from public.playtest_scope')).rows[0].id;
     assert.notEqual(scope, originalOwner);
     // A shared adventure no longer depends on retaining an Auth identity.
@@ -36,6 +38,7 @@ test('open lobby migration preserves existing saves while sharing safe listings 
       }
       await assert.rejects(db.query('select public.list_playtest_campaigns()'), /permission denied/);
       await assert.rejects(db.query('select public.delete_playtest_campaign($1)', [existing]), /permission denied/);
+      await assert.rejects(db.query('select public.reserve_turn($1,$2,$3,$4,0)', [existing, originalOwner, turn, 'Look']), /permission denied/);
       await db.exec('reset role');
     }
     await db.exec('set role service_role');
@@ -47,11 +50,21 @@ test('open lobby migration preserves existing saves while sharing safe listings 
     await assert.rejects(db.query('select public.reserve_turn($1,$2,$3,$4,0)', [existing, scope, turn, 'Look']), /NOT_FOUND/);
     // The application resolves the original save's internal scope; no JWT is needed.
     await db.query('select public.reserve_turn($1,$2,$3,$4,0)', [existing, originalOwner, turn, 'Look']);
+    const lease = (await db.query<{ seconds: number }>('select extract(epoch from lease_until - now())::float8 as seconds from public.campaigns where id=$1', [existing])).rows[0].seconds;
+    assert.ok(lease > 170 && lease <= 180);
+    // Simulate 135s of planning/persistence: the former 90s lease would expire.
+    await db.query("update public.campaigns set lease_until=lease_until-interval '135 seconds', last_attempt_at=now()-interval '135 seconds' where id=$1", [existing]);
+    await assert.rejects(db.query('select public.reserve_turn($1,$2,$3,$4,0)', [existing, originalOwner, randomUUID(), 'Another action']), /TURN_BUSY/);
+    await assert.rejects(db.query('select public.reserve_turn($1,$2,$3,$4,0)', [existing, originalOwner, turn, 'Look']), /TURN_BUSY/);
+    await assert.rejects(db.query('select public.reset_campaign($1,$2,$3)', [existing, originalOwner, randomUUID()]), /TURN_BUSY/);
     await assert.rejects(db.query('select public.delete_playtest_campaign($1)', [existing]), /TURN_BUSY/);
     const proposal = { kind: 'action' as const, interpretation: 'Look.', clarification: null, elapsedMinutes: 5, operations: [] };
     const after = applyProposal(seed, proposal);
     const result = { id: turn, input: 'Look', interpretation: 'Your attempt: Look', changes: ['5 minutes pass.'], narration: null, revision: 1 };
     await db.query('select public.commit_turn($1,$2,$3,0,$4,$5,$6,$7,$8)', [existing, originalOwner, turn, JSON.stringify(after), JSON.stringify(proposal), JSON.stringify(result), JSON.stringify(playerView(after)), '1.0.0']);
+    const replay = (await db.query<{ value: { replayed: boolean } }>('select public.reserve_turn($1,$2,$3,$4,0) as value', [existing, originalOwner, turn, 'Look'])).rows[0].value;
+    assert.equal(replay.replayed, true);
+    assert.equal((await db.query<{ revision: number }>('select revision from public.campaigns where id=$1', [existing])).rows[0].revision, 1);
     await db.query('insert into public.turn_traces(campaign_id,turn_id,stage) values($1,$2,$3)', [existing, turn, 'committed']);
     const verification = randomUUID();
     await db.query('insert into public.verification_runs(id,campaign_id) values($1,$2)', [verification, existing]);

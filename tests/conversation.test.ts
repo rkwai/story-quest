@@ -99,3 +99,10 @@ test('context includes local NPC possessions and resolves fact subjects with own
   assert.ok(!tight.manifest.entityIds.includes('key'));
   assert.ok(tight.manifest.chars <= coreSize + 100);
 });
+
+test('a new adventure skips the empty history query', async t => {
+  const db = createClient('https://conversation-fixture.supabase.co', 'fixture-server-key');
+  const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected history read'); });
+  assert.deepEqual(await recentConversation(db, 'fresh-adventure', 0), []);
+  assert.equal(fetch.mock.callCount(), 0);
+});
