@@ -1,6 +1,20 @@
 # Implementation plan and status
 
-Updated: 2026-09-19. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-09-26. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+
+## Story direction — September 26, 2026
+
+Rick reported aimless wandering and proposed world, major, local and immediate quests. Research on storylets/salience, Dungeon World fronts, Blades progress clocks and LLM narrative systems supports adding explicit adaptable goals and concrete opportunities while preserving player agency. [The research and design record](story-direction.md) includes primary sources and separates established patterns from preliminary AI evidence.
+
+Engine `1.2.0` and prompt `dm-1.4.0` add mandatory typed `storyPlan` proposals with optional hierarchical quest guidance, objectives, stakes, grounded leads and fresh progress evidence. Only active known quests can be the player's focus. Parents must be broader in scope; completing a child does not complete its parent. Quest completion/failure requires new supporting evidence, and a newly created quest cannot also resolve in the same turn. Quiet-turn counters request direction after three turns without supported progress; they do not force deadlines, threats or player actions. Public progress cannot use hidden evidence. Rephrasing lead metadata does not count as progress. Freshness/reference checks do not prove the model's interpretation is meaningful.
+
+The proposal context selects at most six quests with focus ancestry and required evidence protected, including authoritative facts attached to referenced quest entities. Optional branches fit atomically into the existing 24,000-character budget. Explicit questions about resolved quests can retrieve them as historical context without making them active. The narrator receives the focus, visible ancestors and quests explicitly changed by the turn instead of the entire journal; public fact growth still needs a later retrieval slice. Existing model choices, generation limits and deadlines remain unchanged. Jev shadow prompt `jev-shadow-2.1.0` adds progress-quality and topic-drift judgments in its existing request. Semantic context reranking remains deferred until evaluated on StoryQuest examples.
+
+The Story view offers persistent editable lead suggestions and a current objective. The Journal displays scope, parent links, objectives, stakes and known leads; selecting a suggestion never submits it. The opening chapter label no longer remains stuck on Arrival after play advances. Old adventures immediately receive generic leads based on their current known scene, then acquire richer guidance through accepted turns. No saved history is rewritten, no database migration is required, and no reset is needed. Versioned replay preserves 1.0.0 and 1.1.0 behavior; use a story-aware release for rollback after 1.2.0 turns exist.
+
+Verification: TypeScript, all **127 regression tests**, the production build and all **15 phone browser tests** pass. Tests cover hierarchy, hidden references and progress, stale evidence, atomic failures, same-turn resolution bypass, legacy saves, mixed replay, bounded retrieval, resolved-quest questions, narrator quest filtering, API call counts, persisted guidance and editable mobile actions. Story and Journal screenshots were inspected for wrapping/overflow; an independent review found the resolution/retrieval edge cases above, both fixed and tested. Provider responses are mocked; this is not a new paid story-quality playtest. Release via GitHub master and verify the exact production SHA, health and existing adventure projection before reporting deployment success. Next live evaluation should check that a declined lead and an exact NPC question preserve intent while meaningful opportunities continue to develop.
+
+Private traces now capture selected quests/reasons, focus, before/after quiet counts, cited progress, updated quest IDs, surfaced lead IDs and rejected story codes. No additional trace-write stage is introduced. These records support tuning repetition, false progress, topic fidelity and context cost against actual play.
 
 ## Current delivery — open shared playtest (2026-09-18)
 

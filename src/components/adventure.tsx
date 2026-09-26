@@ -2,8 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { demoTurn, newSample, OPENING, suggestions, type SampleChoice } from '@/engine/demo';
 import { playerView } from '@/engine/view';
-import { type PlayerView, type PublicTurn } from '@/engine/types';
+import { type PlayerView, type PublicTurn, type PublicLead } from '@/engine/types';
 import { Inventory, type CarriedItem, type InventoryAction } from '@/components/inventory';
+import { focusedQuest, QuestJournal, StoryGuidance } from '@/components/story-guidance';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
 type CampaignSummary = { id:string; title:string; character_name?:string; revision:number; created_at:string; updated_at:string; archived_at:string|null };
@@ -116,6 +117,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const inventoryCount = inventory?.reduce((count,item)=>count+item.quantity,0) ?? view.character.possessions.length;
   const selectedItem = inventory?.find(item=>item.id===selectedItemId);
   const mode = campaign ? 'live' : 'sample';
+  const focusQuest = focusedQuest(view);
 
   useEffect(() => {
     setLastSelected(storageGet(SELECTED_KEY));
@@ -282,7 +284,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           if (missingCampaign((loadError as Error).message)) { clearCampaign(id); setLobbyMessage('That adventure was deleted. Choose another or start a new one.'); await refreshCampaigns(); }
           else setNotice('The adventure changed, but its latest chapter could not be loaded. Open Adventures to reload it before trying again.');
         }
-      } else if (proposalRejectionCodes.has(code)) {
+      } else if (proposalRejectionCodes.has(code) || code.startsWith('STORY_')) {
         setNotice(`The AI’s response could not be applied consistently. Your world is unchanged, and your text is kept. You can try sending it again. Reference: ${code}.`);
       } else setNotice(messages[code] ?? 'That action could not be completed. Your text is kept; try again.');
     } finally { setBusy(false); submitting.current=false; setPhase(''); }
@@ -291,6 +293,11 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     if (!campaign || busy || archived) return;
     setSelectedItemId(item.id); setNotice(''); setTab('Story');
     setInput(action==='consume'?`I consume one ${item.name}.`:action==='drop'?`I drop ${item.quantity>1?`all ${item.quantity} of my`:'my'} ${item.name}.`:`I use my ${item.name} to `);
+  }
+  function prepareLead(lead:PublicLead) {
+    if (!campaign || busy || archived) return;
+    setInput(lead.action); setSelectedItemId(null); setNotice('');
+    actionInput.current?.focus();
   }
   function openSample() {
     const fresh=newSample(); setSample(fresh); setCampaign(null); setArchived(false); setView(playerView(fresh.world)); setTurns([]);
@@ -334,7 +341,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     {mode==='sample'?<section className="mode-notice" aria-label="Play mode"><div><h2>This is a scripted preview</h2><p>Its three choices play prewritten scenes. Open Adventures to start a real AI story with no login.</p></div><button className="primary" disabled={busy} onClick={showLobby}>Open adventures</button></section>:<p className="shared-story-note">{archived?'Shared playtest · Read-only history · This previous run is preserved.':'Shared playtest · Saved automatically · Anyone can continue this adventure.'}</p>}
     <nav className="bottom-nav" aria-label="Adventure navigation">{(['Story','Character','Journal','World'] as Tab[]).map(item=><button key={item} aria-current={tab===item?'page':undefined} onClick={()=>setTab(item)}><Icon name={item}/><span>{item}</span>{item==='Journal'&&view.quests.some(quest=>quest.status==='active')&&<i/>}</button>)}</nav>
     <div className="workspace"><main className="main-panel">
-      <div className="chapter-bar"><span><span className="chapter-dot"/>{tab==='Story'?'CHAPTER I · THE ARRIVAL':tab.toUpperCase()}</span><span>{storyTime(view.minute)}</span></div>
+      <div className="chapter-bar"><span><span className="chapter-dot"/>{tab==='Story'?(view.revision===0?'THE ARRIVAL':'YOUR STORY'):tab.toUpperCase()}</span><span>{storyTime(view.minute)}</span></div>
       {tab==='Story' ? <>
         <div className="story-body">
           <div className="location-label"><Icon name="World"/>{view.character.location.toUpperCase()}</div>
@@ -349,18 +356,18 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           {notice&&<p className="notice" role="status">{notice}</p>}
           <div ref={end}/>
         </div>
-        <div className="composer">{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>{turns.length===0&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);}}>{choice}<span>↗</span></button>)}</div>}
+        <div className="composer"><StoryGuidance view={view} readOnly={archived||mode==='sample'} busy={busy} onChoose={prepareLead}/>{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>{turns.length===0&&!view.story&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);}}>{choice}<span>↗</span></button>)}</div>}
           {selectedItem&&<div className="selected-item" role="group" aria-label="Selected inventory item"><span>Selected: <strong>{selectedItem.name}</strong></span><button type="button" disabled={busy} onClick={()=>setSelectedItemId(null)} aria-label="Clear selected item"><Icon name="close"/></button></div>}
           <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea ref={actionInput} id="action" value={input} onChange={event=>setInput(event.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
           <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
         </div>
       </> : <div className="detail-body">
         {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><Inventory items={inventory} legacyPossessions={view.character.possessions} readOnly={archived||mode==='sample'} busy={busy} onAction={prepareItemAction}/><h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
-        {tab==='Journal' && <><p className="eyebrow">THREADS TO FOLLOW</p><h2>Your journal</h2><p className="detail-intro">Questions worth asking. Things worth remembering.</p>{view.quests.map(q=><div className="quest-card" key={q.id}><span className={`badge ${q.status}`}>{q.status}</span><h3>{q.title}</h3><p>{q.description}</p></div>)}<h3>Discoveries</h3>{view.facts.map(f=><div className="fact" key={f.id}><span className="tiny-dot"/><p>{f.text}</p></div>)}<h3>What people say</h3>{view.claims.length ? view.claims.map(c=><blockquote key={c.id}><p>“{c.text}”</p><cite>{c.speaker} · Unverified account</cite></blockquote>) : <p className="muted">Conversations will find a place here.</p>}</>}
+        {tab==='Journal' && <><p className="eyebrow">THREADS TO FOLLOW</p><h2>Your journal</h2><p className="detail-intro">Questions worth asking. Things worth remembering.</p><QuestJournal quests={view.quests}/><h3>Discoveries</h3>{view.facts.map(f=><div className="fact" key={f.id}><span className="tiny-dot"/><p>{f.text}</p></div>)}<h3>What people say</h3>{view.claims.length ? view.claims.map(c=><blockquote key={c.id}><p>“{c.text}”</p><cite>{c.speaker} · Unverified account</cite></blockquote>) : <p className="muted">Conversations will find a place here.</p>}</>}
         {tab==='World' && <><p className="eyebrow">BEYOND THE PAGE</p><h2>The world you know</h2><p className="detail-intro">Only what you have encountered. There is always more.</p><h3>People & places</h3>{view.entities.filter(e=>['npc','location','faction'].includes(e.kind)).map(e=><div className="world-row" key={e.id}><div className="world-icon"><Icon name={e.kind==='npc'?'Character':'World'}/></div><div><strong>{e.name}</strong><small>{e.kind==='npc'?'Person':e.kind==='location'?'Place':'Faction'}</small></div></div>)}<h3>The rules of this world</h3>{view.rules.map(r=><div className="rule" key={r.id}><Icon name="spark"/><p>{r.text}</p></div>)}<p className="muted">Time passes when you act. Your world waits while you are away.</p></>}
       </div>}
     </main>
-    <aside className="sidebar"><div className="sidebar-character"><div className="portrait-letter">{view.character.name.slice(0,1)}</div><p className="eyebrow">THE TRAVELER</p><h2>{view.character.name}</h2><p><span className="tiny-dot"/>{view.character.condition}</p><button className="text-button" onClick={()=>setTab('Character')}>View character <span>↗</span></button></div><div className="sidebar-quest"><p className="eyebrow">ON YOUR MIND</p><h3>{view.quests.find(q=>q.status==='active')?.title ?? 'The next chapter'}</h3><p>{view.quests.find(q=>q.status==='active')?.description ?? 'Keep exploring.'}</p><button className="text-button" onClick={()=>setTab('Journal')}>Open journal <span>↗</span></button></div><p className="aside-note">A world that remembers.<br/>A story that belongs to you.</p></aside></div>
+    <aside className="sidebar"><div className="sidebar-character"><div className="portrait-letter">{view.character.name.slice(0,1)}</div><p className="eyebrow">THE TRAVELER</p><h2>{view.character.name}</h2><p><span className="tiny-dot"/>{view.character.condition}</p><button className="text-button" onClick={()=>setTab('Character')}>View character <span>↗</span></button></div><div className="sidebar-quest"><p className="eyebrow">ON YOUR MIND</p><h3>{focusQuest?.title ?? 'The next chapter'}</h3><p>{focusQuest?.objective ?? focusQuest?.description ?? 'Decide what matters to your character.'}</p><button className="text-button" onClick={()=>setTab('Journal')}>Open journal <span>↗</span></button></div><p className="aside-note">A world that remembers.<br/>A story that belongs to you.</p></aside></div>
     </>}
   </div>;
 }

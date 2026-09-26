@@ -1,15 +1,16 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { z } from 'zod';
 import { propose, narrate } from '../src/server/dm';
 import { ModelCallError } from '../src/server/openrouter';
 import { seedWorld } from '../src/engine/seed';
 import { playerView } from '../src/engine/view';
 import { applyProposal } from '../src/engine/reducer';
 import { buildContext } from '../src/engine/context';
-import { proposalSchema } from '../src/engine/types';
+import { proposalSchema, storyWireProposalSchema } from '../src/engine/types';
 import duplicateDialogue from './fixtures/dialogue-duplicate-proposal.json';
 
-const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [], itemActions: [] };
+const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [], itemActions: [], storyPlan: { focusQuestId: null, questUpdates: [], progress: [] } };
 function config(t: TestContext) {
   const values = { OPENROUTER_API_KEY: 'test-private-key', STORY_MODEL: 'story/model', PROPOSAL_MODEL: 'planner/model', PROPOSAL_REASONING_EFFORT: 'low', STORY_REASONING_EFFORT: 'none' };
   const previous = Object.fromEntries(Object.keys(values).map(k => [k, process.env[k]]));
@@ -36,6 +37,7 @@ test('proposal routes through OpenRouter with strict schema and sanitized billab
     assert.deepEqual(body.provider, { require_parameters: true });
     assert.deepEqual(body.reasoning, { effort: 'low', exclude: true });
     assert.equal(body.response_format.json_schema.strict, true);
+    assert.deepEqual(body.response_format.json_schema.schema, z.toJSONSchema(storyWireProposalSchema, { target: 'draft-7' }));
     assert.match(body.messages[1].content, /hidden-cause/);
     return Response.json(envelope(JSON.stringify(proposal)));
   });
@@ -47,6 +49,28 @@ test('proposal routes through OpenRouter with strict schema and sanitized billab
   assert.equal(result.metrics.usage && (result.metrics.usage as Record<string, unknown>).costUsd, 0.001);
   assert.doesNotMatch(JSON.stringify(result.metrics), /PRIVATE_|test-private-key|hidden-cause/);
   assert.equal(fetch.mock.callCount(), 1);
+});
+
+test('the live story schema requires every property of guidance, leads and progress in strict provider output', () => {
+  const schema = z.toJSONSchema(storyWireProposalSchema, { target: 'draft-7' });
+  const checked: string[][] = [];
+  function visit(node: unknown) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    const record = node as Record<string, unknown>;
+    if (record.type === 'object') {
+      const properties = Object.keys(record.properties as object ?? {}).sort();
+      checked.push(properties);
+      assert.equal(record.additionalProperties, false);
+      assert.deepEqual([...(record.required as string[] ?? [])].sort(), properties);
+    }
+    Object.values(record).forEach(visit);
+  }
+  visit(schema);
+  assert.ok(checked.some(properties => properties.includes('storyPlan')));
+  assert.ok(checked.some(properties => properties.includes('questUpdates')));
+  assert.ok(checked.some(properties => properties.includes('evidenceFactIds')));
+  assert.ok(checked.some(properties => properties.includes('claimIds')));
 });
 
 test('narration has a separate model, accepts prose and receives only player-visible knowledge', async t => {
@@ -124,7 +148,7 @@ test('an OpenRouter key alone uses the accepted DeepSeek defaults for both stage
 test('the recorded live dialogue failure is rejected atomically without silently deduplicating model output', async t => {
   config(t);
   // Adapt only the transport envelope; preserve the recorded invalid operations.
-  const wire = { ...duplicateDialogue, itemActions: [], operations: duplicateDialogue.operations.map(operation => ({ ...operation, entity: { ...operation.entity, itemState: null } })) };
+  const wire = { ...duplicateDialogue, itemActions: [], storyPlan: { focusQuestId: null, questUpdates: [], progress: [] }, operations: duplicateDialogue.operations.map(operation => ({ ...operation, entity: { ...operation.entity, itemState: null } })) };
   t.mock.method(globalThis, 'fetch', async () => Response.json(envelope(JSON.stringify(wire))));
   const world = seedWorld();
   const original = structuredClone(world);
@@ -144,7 +168,7 @@ test('an NPC answer is recorded as testimony with the original player question a
   const reply = 'I keep watch here in case someone returns looking for their family.';
   const world = seedWorld();
   const context = { ...buildContext(world, input).state, recentTurns: [{ input: 'I approach her.', narration: 'You stand beneath the arch.' }] };
-  const dialogue = { kind: 'action', interpretation: 'You ask the woman why she remains here.', clarification: null, elapsedMinutes: 1, itemActions: [],
+  const dialogue = { kind: 'action', interpretation: 'You ask the woman why she remains here.', clarification: null, elapsedMinutes: 1, itemActions: [], storyPlan: { focusQuestId: null, questUpdates: [], progress: [] },
     operations: [{ op: 'add_claim', claim: { id: 'mara_reason_1', speakerId: 'mara', text: reply, knownBy: ['player', 'mara'] } }] };
   t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
     const body = JSON.parse(options.body as string);

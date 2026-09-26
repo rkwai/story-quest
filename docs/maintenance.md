@@ -38,6 +38,14 @@ Regression coverage should include the missing-staff fixture with misleading old
 
 Use `replayVersioned` for histories mixing engine 1.0.0 and 1.1.0; preserve the old reducer and original stored seed. Do not add equipment to repair an earlier unsupported narration or rewrite accepted outcomes. After 1.1.0 turns exist, use an inventory-aware release for rollback or roll forward with a fix: the pre-1.1 app ignores quantity and usability and could revive depleted gear in its UI and adjudication. See [inventory compatibility and limits](inventory.md).
 
+## Story direction diagnostics
+
+Engine 1.2.0 records selected quest IDs, focus, ranking reasons and omitted quest count in the existing `context` trace. The `committed` trace includes before/after quiet-turn counts, updated quest IDs, progress evidence and surfaced lead IDs. A rejected story plan has `story.status=blocked` plus a stable `STORY_*` code in `failed`. These details remain server-only. No extra trace-write round trip or model call is added.
+
+For aimlessness, compare the selected objective with the exact input, cited new evidence, the public next lead and the narration. Look for repeated lead IDs/text, stale evidence, superficial facts counted as progress or a main quest displacing the user's actual question. The existing Jev batch adds `storyProgressConcern` and `storyIntentConcern` as optional advisory probabilities; missing answers are not zero concern and no score changes world state. Use player feedback and recorded cases to evaluate these signals before adding a context reranker.
+
+Old saves obtain generic suggestions from their known current scene until accepted turns add guidance. This is a read projection, not a historical mutation. No database migration or reset is required. Replay dispatches by the stored engine version; after 1.2.0 turns exist, use a story-aware release for rollback. Paid playtests still require explicit opt-in; mocked tests establish contracts, not storytelling quality. See [story direction](story-direction.md).
+
 ## World-planning deadlines
 
 Keep these budgets coordinated: proposal 120 seconds, `/api/turns` 150 seconds, turn reservation 180 seconds. The route export and first exact-match rule in `vercel.json` both set 150. The 30-second margins leave room for context reads, validation, the bounded Jev review and saving, and prevent a second visitor taking over a still-running request. Other routes retain their 60-second configuration; narration calls remain 45 seconds and Jev four seconds. A platform-killed request can leave a busy lease until expiry; handled proposal failures release it.

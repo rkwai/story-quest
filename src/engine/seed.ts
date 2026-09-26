@@ -18,7 +18,18 @@ export function seedWorld(name = 'Rowan', premise = 'A quiet, mysterious fantasy
       { id: 'arrival', key: 'player.arrival', text: 'You arrived in the rain. The woman at the arch wore a weathered blue coat and held an unlit lantern. She said that if you were looking for someone, you should start with their name.', subjects: ['player', 'mara', 'ashford', 'lantern'], at: 480, knownBy: ['player', 'mara'] },
       { id: 'ability', key: 'player.background', text: 'You are a traveler with a patient ear and an eye for overlooked details.', subjects: ['player'], at: 0, knownBy: ['player'] }
     ],
-    claims: [], quests: [{ id: 'mystery', title: 'What remains of Ashford', description: 'Discover what destroyed the town, and whether anyone can still be helped.', status: 'active', knownBy: ['player'] }],
+    claims: [], quests: [{
+      id: 'mystery', title: 'What remains of Ashford', description: 'Discover what destroyed the town, and whether anyone can still be helped.', status: 'active', knownBy: ['player'],
+      guidance: {
+        scope: 'arc', parentId: null, objective: 'Find a reliable account of what happened to Ashford and a concrete way to help.',
+        stakes: 'What happened here may still matter to the people who remain.', entityIds: ['ashford', 'mara', 'tower'], lastProgressRevision: 0,
+        leads: [
+          { id: 'ask_woman', text: 'Ask the woman what brought her to the ruins.', action: 'Ask the woman what she is doing here, and whether there is something I can help with.', entityIds: ['mara'], evidenceFactIds: ['arrival'], evidenceClaimIds: [] },
+          { id: 'inspect_tower', text: 'Investigate the tower that survived.', action: 'Examine the surviving bell tower for clues to what happened to Ashford.', entityIds: ['tower', 'ashford'], evidenceFactIds: ['ruin'], evidenceClaimIds: [] },
+        ],
+      },
+    }],
+    story: { focusQuestId: 'mystery', quietTurns: 0, lastProgressRevision: 0 },
     rules: [{ id: 'memory', text: 'Magic can preserve a memory, but cannot change an event that has already happened.', knownBy: ['player'] }],
     scheduled: [{ id: 'dusk', dueAt: 1080, description: 'At dusk, Mara leaves the exposed arch and takes shelter in the bell tower.', subjects: ['mara', 'tower'], resolved: false }]
   };

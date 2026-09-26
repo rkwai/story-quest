@@ -22,6 +22,8 @@ Adventures provide phone-friendly Story, Character, Journal and World views, fre
 
 The Character view shows carried items, quantities and availability, with an Inventory shortcut beside the story composer. Selecting an item prepares an editable action; sending it remains explicit. Live proposals declare item use, acquisition, transfers, consumption, damage and repair, which the engine checks before any consequence commits. A missing item blocks the attempt without advancing the world. Existing saves and recorded history remain intact. See [inventory behavior and current limits](docs/inventory.md), including the remaining dependency on the DM recognizing equipment requirements in free text.
 
+Story direction connects optional world, major, local and immediate quests through objectives, stakes and grounded leads. The Story view offers editable next moves throughout the adventure; the Journal explains their wider purpose. A bounded director context helps the DM develop relevant threads and notice stretches without supported progress while preserving the player's exact intent. Progress requires fresh evidence; plans never establish future facts. Existing adventures gain safe scene-based suggestions without a reset. See [research, mechanics and limits](docs/story-direction.md).
+
 ## Run
 
 ```sh
@@ -43,6 +45,7 @@ npm run build
 - [Product and mobile experience](docs/product.md)
 - [Architecture, truth and turn lifecycle](docs/architecture.md)
 - [Inventory and action requirements](docs/inventory.md)
+- [Story direction, quest hierarchy and research](docs/story-direction.md)
 - [Implementation plan and current status](docs/implementation.md)
 - [Maintenance, diagnostics and evaluation](docs/maintenance.md)
 - [OpenRouter, Jev and model choices](docs/models.md)

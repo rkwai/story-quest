@@ -103,6 +103,27 @@ test('configured Jev model is explicit and unsafe configuration or oversized con
   assert.equal(fetchMock.mock.callCount(), 1);
 });
 
+test('story progression and player intent are reviewed in the existing single advisory batch', async t => {
+  configure(t);
+  const planned = { ...proposal, itemActions: [], storyPlan: { focusQuestId: null, questUpdates: [], progress: [] } };
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    assert.equal(Object.keys(body.questions).length, 6);
+    assert.equal(body.questions.storyProgressConcern.type, 'noul');
+    assert.equal(body.questions.storyIntentConcern.type, 'noul');
+    return Response.json({ ...envelope(), answers: { ...envelope().answers,
+      storyProgressConcern: { type: 'noul', noul: 0.7 }, storyIntentConcern: { type: 'noul', noul: 0.9 }
+    } });
+  });
+  const before = structuredClone(planned);
+  const result = await reviewProposal(privateContext, 'Why is she here?', planned);
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(result.status, 'ok');
+  assert.deepEqual(result.answers?.storyProgressConcern, { probability: 0.7 });
+  assert.deepEqual(result.answers?.storyIntentConcern, { probability: 0.9 });
+  assert.deepEqual(planned, before, 'Advisory judgments never alter a plan');
+});
+
 test('gateway choice confidence may be absent and only reported finite costs are retained', async t => {
   configure(t);
   let cost: unknown = undefined;
