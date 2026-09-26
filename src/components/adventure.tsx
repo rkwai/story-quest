@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { demoTurn, newSample, OPENING, suggestions, type SampleChoice } from '@/engine/demo';
 import { playerView } from '@/engine/view';
 import { type PlayerView, type PublicTurn } from '@/engine/types';
+import { Inventory, type CarriedItem, type InventoryAction } from '@/components/inventory';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
 type CampaignSummary = { id:string; title:string; character_name?:string; revision:number; created_at:string; updated_at:string; archived_at:string|null };
@@ -25,6 +26,21 @@ const proposalRejectionCodes = new Set([
   'UNRESOLVED_DEADLINE','INVALID_PLAYER',
 ]);
 const messages: Record<string,string> = {
+  ITEM_REQUIRED: 'You do not have the item needed for that action. Choose something you carry or describe another approach. Your world is unchanged, and your text is kept.',
+  ITEM_NOT_CARRIED: 'That item is not in your inventory. Choose something you carry or describe another approach. Your world is unchanged, and your text is kept.',
+  ITEM_UNAVAILABLE: 'That item is not available for this action. Check your inventory and choose another approach. Your world is unchanged, and your text is kept.',
+  ITEM_NOT_REACHABLE: 'That item is not within reach. Move closer or describe another approach. Your world is unchanged, and your text is kept.',
+  ITEM_UNUSABLE: 'That item cannot be used in its current state. Choose another item or another approach. Your world is unchanged, and your text is kept.',
+  ITEM_DEPLETED: 'You have none of that item left. Check your inventory and choose another approach. Your world is unchanged, and your text is kept.',
+  ITEM_INSUFFICIENT_QUANTITY: 'You do not have enough of that item. Check the quantity in your inventory. Your world is unchanged, and your text is kept.',
+  ITEM_NOT_CONSUMABLE: 'That item cannot be consumed. Try using it another way. Your world is unchanged, and your text is kept.',
+  ITEM_PARTIAL_TRANSFER: 'That transfer could not be applied safely. Try moving the whole stack or describing another approach. Your world is unchanged, and your text is kept.',
+  ITEM_INVALID_RECIPIENT: 'That item could not be given to the intended recipient. Your world is unchanged, and your text is kept.',
+  ITEM_PERSON_UNAVAILABLE: 'That person is not available for this exchange. Your world is unchanged, and your text is kept.',
+  ITEM_DIRECT_MUTATION: 'The storyteller could not apply that inventory change consistently. Your world is unchanged, and your text is kept.',
+  ITEM_INVALID_DISCOVERY: 'The storyteller could not establish that item consistently. Your world is unchanged, and your text is kept.',
+  ITEM_INVALID_STATE: 'The storyteller could not apply that item change consistently. Your world is unchanged, and your text is kept.',
+  INVENTORY_ACTION_REQUIRED: 'The storyteller could not match that action to your inventory. Your world is unchanged, and your text is kept.',
   MODEL_TIMEOUT: 'The world update took too long. Your action has not been applied, and your text is kept. You can try sending it again.',
   MODEL_UNAVAILABLE: 'The storyteller is taking a moment. Your action has not been applied. Please try again.',
   MODEL_INCOMPLETE: 'The storyteller could not finish that turn. Your world is unchanged.',
@@ -70,6 +86,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const [turns,setTurns] = useState<PublicTurn[]>([]);
   const [tab,setTab] = useState<Tab>('Story');
   const [input,setInput] = useState('');
+  const [selectedItemId,setSelectedItemId] = useState<string|null>(null);
   const [busy,setBusy] = useState(false);
   const [phase,setPhase] = useState('');
   const [notice,setNotice] = useState('');
@@ -89,11 +106,15 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const [lobbyMessage,setLobbyMessage] = useState('');
   const submitting = useRef(false);
   const listRequest = useRef(0);
-  const pending = useRef<{id:string;input:string;campaign:string}|null>(null);
+  const pending = useRef<{id:string;input:string;campaign:string;itemId?:string}|null>(null);
   const resetRequest = useRef<{id:string;campaign:string}|null>(null);
   const cancelReset = useRef<HTMLButtonElement|null>(null);
   const cancelDelete = useRef<HTMLButtonElement|null>(null);
   const end = useRef<HTMLDivElement|null>(null);
+  const actionInput = useRef<HTMLTextAreaElement|null>(null);
+  const inventory = view.inventory?.filter(item=>item.quantity>0);
+  const inventoryCount = inventory?.reduce((count,item)=>count+item.quantity,0) ?? view.character.possessions.length;
+  const selectedItem = inventory?.find(item=>item.id===selectedItemId);
   const mode = campaign ? 'live' : 'sample';
 
   useEffect(() => {
@@ -107,6 +128,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   useEffect(() => { if (!lobby && turns.length) end.current?.scrollIntoView({behavior:'smooth',block:'end'}); }, [turns.length,phase,lobby]);
   useEffect(() => { if (resetConfirm) cancelReset.current?.focus(); }, [resetConfirm]);
   useEffect(() => { if (deleteConfirm) cancelDelete.current?.focus(); }, [deleteConfirm]);
+  useEffect(() => { if (!lobby && tab==='Story' && selectedItemId) actionInput.current?.focus(); }, [lobby,tab,selectedItemId]);
 
   async function refreshCampaigns() {
     const request = ++listRequest.current;
@@ -120,13 +142,22 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   }
   function selectCampaign(data:CampaignData) {
     setCampaign(data.id); setLastSelected(data.id); setArchived(data.archived);
-    setView(data.view); setTurns(data.turns); setTab('Story'); setInput(''); setNotice('');
+    setView(data.view); setTurns(data.turns); setTab('Story'); setInput(''); setSelectedItemId(null); setNotice('');
     setResetConfirm(false); setDeleteConfirm(null); setLobby(false);
     storageSet(SELECTED_KEY,data.id);
     try {
       const saved = JSON.parse(storageGet(pendingKey(data.id)) ?? 'null');
-      pending.current = saved?.campaign === data.id && typeof saved.id === 'string' && typeof saved.input === 'string' ? saved : null;
-      if (pending.current) setInput(pending.current.input);
+      pending.current = saved?.campaign === data.id && typeof saved.id === 'string' && typeof saved.input === 'string' && (saved.itemId===undefined || typeof saved.itemId==='string') ? saved : null;
+      if (pending.current && data.turns.some(turn=>turn.id===pending.current?.id)) {
+        pending.current=null; storageRemove(pendingKey(data.id));
+      }
+      if (pending.current) {
+        setInput(pending.current.input);
+        if (pending.current.itemId) {
+          if (!data.archived && data.view.inventory?.some(item=>item.id===pending.current?.itemId && item.quantity>0)) setSelectedItemId(pending.current.itemId);
+          else { pending.current=null; storageRemove(pendingKey(data.id)); }
+        }
+      }
     } catch { pending.current=null; }
   }
   async function loadCampaign(id:string) {
@@ -140,7 +171,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     if (pending.current?.campaign === id) pending.current=null;
     if (resetRequest.current?.campaign === id) resetRequest.current=null;
     if (campaign === id) {
-      setCampaign(null); setArchived(false); setTurns([]); setInput(''); setNotice(''); setLobby(true);
+      setCampaign(null); setArchived(false); setTurns([]); setInput(''); setSelectedItemId(null); setNotice(''); setLobby(true);
       setView(playerView(newSample().world));
     }
     setResetConfirm(false); setDeleteConfirm(null);
@@ -218,7 +249,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   }
   function playSample(choice:SampleChoice) {
     if (campaign || submitting.current) return;
-    setNotice('');
+    setNotice(''); setSelectedItemId(null);
     const result=demoTurn(sample.world,choice,crypto.randomUUID());
     if (result.clarification) { setNotice(result.clarification); return; }
     const next={world:result.world,turns:[...sample.turns,result.turn!]};
@@ -230,11 +261,12 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     const id=campaign;
     submitting.current=true; setBusy(true); setNotice(''); setPhase('Considering your action…');
     try {
-      if (!pending.current || pending.current.input!==action || pending.current.campaign!==id) pending.current={id:crypto.randomUUID(),input:action,campaign:id};
+      const itemId=selectedItem?.id;
+      if (!pending.current || pending.current.input!==action || pending.current.campaign!==id || pending.current.itemId!==itemId) pending.current={id:crypto.randomUUID(),input:action,campaign:id,...(itemId?{itemId}:{})};
       storageSet(pendingKey(id),JSON.stringify(pending.current));
-      const data=await api('/api/turns',{campaignId:id,turnId:pending.current.id,revision:view.revision,input:action});
+      const data=await api('/api/turns',{campaignId:id,turnId:pending.current.id,revision:view.revision,input:action,...(pending.current.itemId?{itemId:pending.current.itemId}:{})});
       if (data.clarification) { setNotice(data.clarification); pending.current=null; storageRemove(pendingKey(id)); return; }
-      setInput(''); pending.current=null; storageRemove(pendingKey(id));
+      setInput(''); setSelectedItemId(null); pending.current=null; storageRemove(pendingKey(id));
       if (data.view) setView(data.view);
       if (data.replayed) await loadCampaign(id);
       else setTurns(old=>[...old.filter(turn=>turn.id!==data.turn.id),data.turn]);
@@ -255,9 +287,14 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
       } else setNotice(messages[code] ?? 'That action could not be completed. Your text is kept; try again.');
     } finally { setBusy(false); submitting.current=false; setPhase(''); }
   }
+  function prepareItemAction(item:CarriedItem, action:InventoryAction) {
+    if (!campaign || busy || archived) return;
+    setSelectedItemId(item.id); setNotice(''); setTab('Story');
+    setInput(action==='consume'?`I consume one ${item.name}.`:action==='drop'?`I drop ${item.quantity>1?`all ${item.quantity} of my`:'my'} ${item.name}.`:`I use my ${item.name} to `);
+  }
   function openSample() {
     const fresh=newSample(); setSample(fresh); setCampaign(null); setArchived(false); setView(playerView(fresh.world)); setTurns([]);
-    setTab('Story'); setNotice(''); setInput(''); setLobby(false); setResetConfirm(false); pending.current=null;
+    setTab('Story'); setNotice(''); setInput(''); setSelectedItemId(null); setLobby(false); setResetConfirm(false); pending.current=null;
   }
 
   return <div className="app-shell">
@@ -312,12 +349,13 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           {notice&&<p className="notice" role="status">{notice}</p>}
           <div ref={end}/>
         </div>
-        <div className="composer">{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><p className="composer-title">What do you do?</p>{turns.length===0&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>setInput(choice)}>{choice}<span>↗</span></button>)}</div>}
-          <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea id="action" value={input} onChange={event=>setInput(event.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
+        <div className="composer">{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>{turns.length===0&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);}}>{choice}<span>↗</span></button>)}</div>}
+          {selectedItem&&<div className="selected-item" role="group" aria-label="Selected inventory item"><span>Selected: <strong>{selectedItem.name}</strong></span><button type="button" disabled={busy} onClick={()=>setSelectedItemId(null)} aria-label="Clear selected item"><Icon name="close"/></button></div>}
+          <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea ref={actionInput} id="action" value={input} onChange={event=>setInput(event.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
           <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
         </div>
       </> : <div className="detail-body">
-        {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><h3>What you carry</h3>{view.character.possessions.map(x=><div className="list-row" key={x}><Icon name="Journal"/>{x}</div>)}<h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
+        {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><Inventory items={inventory} legacyPossessions={view.character.possessions} readOnly={archived||mode==='sample'} busy={busy} onAction={prepareItemAction}/><h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
         {tab==='Journal' && <><p className="eyebrow">THREADS TO FOLLOW</p><h2>Your journal</h2><p className="detail-intro">Questions worth asking. Things worth remembering.</p>{view.quests.map(q=><div className="quest-card" key={q.id}><span className={`badge ${q.status}`}>{q.status}</span><h3>{q.title}</h3><p>{q.description}</p></div>)}<h3>Discoveries</h3>{view.facts.map(f=><div className="fact" key={f.id}><span className="tiny-dot"/><p>{f.text}</p></div>)}<h3>What people say</h3>{view.claims.length ? view.claims.map(c=><blockquote key={c.id}><p>“{c.text}”</p><cite>{c.speaker} · Unverified account</cite></blockquote>) : <p className="muted">Conversations will find a place here.</p>}</>}
         {tab==='World' && <><p className="eyebrow">BEYOND THE PAGE</p><h2>The world you know</h2><p className="detail-intro">Only what you have encountered. There is always more.</p><h3>People & places</h3>{view.entities.filter(e=>['npc','location','faction'].includes(e.kind)).map(e=><div className="world-row" key={e.id}><div className="world-icon"><Icon name={e.kind==='npc'?'Character':'World'}/></div><div><strong>{e.name}</strong><small>{e.kind==='npc'?'Person':e.kind==='location'?'Place':'Faction'}</small></div></div>)}<h3>The rules of this world</h3>{view.rules.map(r=><div className="rule" key={r.id}><Icon name="spark"/><p>{r.text}</p></div>)}<p className="muted">Time passes when you act. Your world waits while you are away.</p></>}
       </div>}

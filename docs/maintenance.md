@@ -26,11 +26,23 @@ select turn_id, stage, details from public.turn_traces
 where campaign_id = '<campaign UUID>' order by created_at;
 ```
 
+## Inventory diagnostics
+
+Engine 1.1.0 proposals include ordered `itemActions`; prompt `dm-1.3.0` treats the inventory context as the complete possession list. Inspect the pre-turn snapshot, context `inventoryIds` and `selectedItemId`, then the proposal's item actions and accepted public changes. The Character view exposes only the player's known carried items and mechanical state, never raw item descriptions or private diagnostics.
+
+The existing `committed` trace records `details.inventory.status = validated` and its `itemActions`. The existing `failed` trace records `details.inventory.status = blocked`, the safe error code and the rejected proposal when available. These fields use the existing trace writes; there is no additional logging request, inventory classifier or generation. A blocked item check runs before Jev, commit and narration. It releases the lease without changing campaign state, revision or story time. It may still follow one paid proposal request; an invalid explicitly selected ID is rejected before generation. A blocked attempt retains the existing request quota behavior.
+
+For an item report, distinguish ownership, reach, quantity, usability and interpretation. `ITEM_REQUIRED` indicates the model explicitly identified a missing requirement. `ITEM_NOT_CARRIED`, `ITEM_NOT_REACHABLE`, `ITEM_DEPLETED`, `ITEM_INSUFFICIENT_QUANTITY` and `ITEM_UNUSABLE` indicate mechanical failures. `ITEM_DIRECT_MUTATION` catches an attempt to bypass typed inventory operations, while `INVENTORY_ACTION_REQUIRED` catches an action proposal ignoring the UI's selected item. Unknown/private item errors must not disclose hidden item names. A missing semantic dependency with an empty `itemActions` list is a model omission, not evidence that inventory checks ran and approved the equipment.
+
+Regression coverage should include the missing-staff fixture with misleading old prose, another NPC's item, distant objects, same-name distinct IDs, partial consumption, zero quantity, damage/repair, transfers and atomic rollback when a later operation fails. Check that using an existing item still allows creative intent, talking about an item does not require owning it, and blocked drafts remain editable without submitting narration. Phone checks should cover Inventory → prepared action → explicit Send and archived/sample read-only inventory. Report mocked checks separately from authorized paid model playtests.
+
+Use `replayVersioned` for histories mixing engine 1.0.0 and 1.1.0; preserve the old reducer and original stored seed. Do not add equipment to repair an earlier unsupported narration or rewrite accepted outcomes. After 1.1.0 turns exist, use an inventory-aware release for rollback or roll forward with a fix: the pre-1.1 app ignores quantity and usability and could revive depleted gear in its UI and adjudication. See [inventory compatibility and limits](inventory.md).
+
 ## World-planning deadlines
 
 Keep these budgets coordinated: proposal 120 seconds, `/api/turns` 150 seconds, turn reservation 180 seconds. The route export and first exact-match rule in `vercel.json` both set 150. The 30-second margins leave room for context reads, validation, the bounded Jev review and saving, and prevent a second visitor taking over a still-running request. Other routes retain their 60-second configuration; narration calls remain 45 seconds and Jev four seconds. A platform-killed request can leave a busy lease until expiry; handled proposal failures release it.
 
-Apply `longer_proposal_lease` before deploying the application change. It only replaces the reservation function and preserves its guards, shared quota and private grants. Existing active leases are left alone. Application rollback is safe with the longer lease; keep the forward migration and saved history. Fresh migrations and tests must run in timestamp order.
+Apply `longer_proposal_lease` before deploying the application change. It only replaces the reservation function and preserves its guards, shared quota and private grants. Existing active leases are left alone. The longer lease tolerates application rollback, subject to the inventory-version compatibility limits above; keep the forward migration and saved history. Fresh migrations and tests must run in timestamp order.
 
 For failures inspect `details.modelCall` on the private `failed` trace: `timeoutMs`, `failureKind`, `responsePhase`, `headersMs`, `httpStatus` and `durationMs`. An HTTP 200 plus `failureKind=timeout` and `responsePhase=body` means headers arrived but the complete JSON response exceeded the deadline. `MODEL_TIMEOUT` is HTTP 504, while provider-unavailable errors are 503. Missing provider usage/cost remains unknown, not zero. Hard platform termination can still prevent final trace persistence.
 

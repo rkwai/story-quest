@@ -9,7 +9,7 @@ import { buildContext } from '../src/engine/context';
 import { proposalSchema } from '../src/engine/types';
 import duplicateDialogue from './fixtures/dialogue-duplicate-proposal.json';
 
-const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [] };
+const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [], itemActions: [] };
 function config(t: TestContext) {
   const values = { OPENROUTER_API_KEY: 'test-private-key', STORY_MODEL: 'story/model', PROPOSAL_MODEL: 'planner/model', PROPOSAL_REASONING_EFFORT: 'low', STORY_REASONING_EFFORT: 'none' };
   const previous = Object.fromEntries(Object.keys(values).map(k => [k, process.env[k]]));
@@ -123,7 +123,9 @@ test('an OpenRouter key alone uses the accepted DeepSeek defaults for both stage
 
 test('the recorded live dialogue failure is rejected atomically without silently deduplicating model output', async t => {
   config(t);
-  t.mock.method(globalThis, 'fetch', async () => Response.json(envelope(JSON.stringify(duplicateDialogue))));
+  // Adapt only the transport envelope; preserve the recorded invalid operations.
+  const wire = { ...duplicateDialogue, itemActions: [], operations: duplicateDialogue.operations.map(operation => ({ ...operation, entity: { ...operation.entity, itemState: null } })) };
+  t.mock.method(globalThis, 'fetch', async () => Response.json(envelope(JSON.stringify(wire))));
   const world = seedWorld();
   const original = structuredClone(world);
   const input = 'I ask the woman, "What are you doing in this desolate area?"';
@@ -142,7 +144,7 @@ test('an NPC answer is recorded as testimony with the original player question a
   const reply = 'I keep watch here in case someone returns looking for their family.';
   const world = seedWorld();
   const context = { ...buildContext(world, input).state, recentTurns: [{ input: 'I approach her.', narration: 'You stand beneath the arch.' }] };
-  const dialogue = { kind: 'action', interpretation: 'You ask the woman why she remains here.', clarification: null, elapsedMinutes: 1,
+  const dialogue = { kind: 'action', interpretation: 'You ask the woman why she remains here.', clarification: null, elapsedMinutes: 1, itemActions: [],
     operations: [{ op: 'add_claim', claim: { id: 'mara_reason_1', speakerId: 'mara', text: reply, knownBy: ['player', 'mara'] } }] };
   t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => {
     const body = JSON.parse(options.body as string);

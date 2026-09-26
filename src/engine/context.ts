@@ -1,4 +1,5 @@
 import { EngineError, type World } from './types';
+import { itemState } from './inventory';
 
 export interface RecentPublicTurn {
   id: string;
@@ -19,7 +20,7 @@ export function boundConversation(turns: readonly RecentPublicTurn[], maxChars =
   return recent;
 }
 
-export function buildContext(world: World, input: string, maxChars = 24000, recentTurns: readonly RecentPublicTurn[] = []) {
+export function buildContext(world: World, input: string, maxChars = 24000, recentTurns: readonly RecentPublicTurn[] = [], selectedItemId?: string) {
   const words = input.toLowerCase().match(/[a-z]{3,}/g) ?? [];
   const player = world.entities.find(e => e.id === world.playerId)!;
   const entities = world.entities.filter(e => e.id === player.id || e.id === player.locationId || e.locationId === player.locationId || e.ownerId === player.id || words.some(w => e.name.toLowerCase().includes(w)));
@@ -46,7 +47,11 @@ export function buildContext(world: World, input: string, maxChars = 24000, rece
     return [...selected].map(id => byId.get(id)!);
   }
   const linked = withReferences([...ids, ...facts.flatMap(fact => fact.subjects)]);
-  const base = { title: world.title, premise: world.premise, minute: world.minute, playerId: world.playerId, entities: linked, rules: world.rules, facts, claims: world.claims.filter(c => ids.has(c.speakerId)).slice(-10), quests: world.quests.filter(q => q.status === 'active'), scheduled, recentTurns: [] as RecentPublicTurn[] };
+  // Ownership is a complete mechanical list, not a suggestion inferred from prose.
+  // Keep it in mandatory context so optional memories cannot displace equipment.
+  const inventory = world.entities.filter(e => e.kind === 'item' && e.ownerId === world.playerId)
+    .map(e => ({ id: e.id, name: e.name, ...itemState(e) }));
+  const base = { title: world.title, premise: world.premise, minute: world.minute, playerId: world.playerId, entities: linked, inventory: { complete: true, items: inventory, selectedItemId: selectedItemId ?? null }, rules: world.rules, facts, claims: world.claims.filter(c => ids.has(c.speakerId)).slice(-10), quests: world.quests.filter(q => q.status === 'active'), scheduled, recentTurns: [] as RecentPublicTurn[] };
   if (JSON.stringify(base).length > maxChars) throw new EngineError('CONTEXT_BUDGET_EXCEEDED');
   base.recentTurns = boundConversation(recentTurns.filter(turn => turn.revision <= world.revision));
   while (base.recentTurns.length && JSON.stringify(base).length > maxChars) base.recentTurns.shift();
@@ -60,5 +65,5 @@ export function buildContext(world: World, input: string, maxChars = 24000, rece
     if (JSON.stringify(candidate).length > maxChars) continue;
     base.entities = candidate.entities; base.facts = candidate.facts;
   }
-  return { state: base, manifest: { entityIds: base.entities.map(e => e.id), factIds: base.facts.map(f => f.id), turnIds: base.recentTurns.map(turn => turn.id), conversationChars: base.recentTurns.length ? JSON.stringify(base.recentTurns).length : 0, chars: JSON.stringify(base).length } };
+  return { state: base, manifest: { entityIds: base.entities.map(e => e.id), factIds: base.facts.map(f => f.id), inventoryIds: inventory.map(item => item.id), selectedItemId: selectedItemId ?? null, turnIds: base.recentTurns.map(turn => turn.id), conversationChars: base.recentTurns.length ? JSON.stringify(base.recentTurns).length : 0, chars: JSON.stringify(base).length } };
 }

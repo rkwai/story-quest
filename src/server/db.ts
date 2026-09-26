@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { EngineError } from '@/engine/types';
+import { InventoryError } from '@/engine/inventory';
 import { serverSupabaseConfig } from '@/server/config';
 
 export function database() {
@@ -50,7 +51,7 @@ export async function trace(campaign: string, turn: string, stage: string, durat
 }
 export function failure(error: unknown) {
   const code = error instanceof EngineError ? error.code : 'INVALID_REQUEST';
-  const status = code === 'CROSS_ORIGIN_REQUEST' ? 403 : code === 'NOT_FOUND' ? 404 : code === 'MODEL_TIMEOUT' ? 504 : ['NOT_CONFIGURED','MODEL_UNAVAILABLE'].includes(code) ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY','CAMPAIGN_ARCHIVED','RESET_ID_REUSED','CAMPAIGN_LIMIT'].includes(code) ? 409 : 400;
+  const status = error instanceof InventoryError ? 409 : code === 'CROSS_ORIGIN_REQUEST' ? 403 : code === 'NOT_FOUND' ? 404 : code === 'MODEL_TIMEOUT' ? 504 : ['NOT_CONFIGURED','MODEL_UNAVAILABLE'].includes(code) ? 503 : ['RATE_LIMIT','DAILY_LIMIT'].includes(code) ? 429 : ['TURN_BUSY','STALE_REVISION','NARRATION_BUSY','CAMPAIGN_ARCHIVED','RESET_ID_REUSED','CAMPAIGN_LIMIT'].includes(code) ? 409 : 400;
   return Response.json({ error: code }, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 export async function readBody(request: Request) {

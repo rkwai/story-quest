@@ -1,0 +1,68 @@
+{
+  "case": "A staff mentioned in input and earlier prose is not a possessed item",
+  "input": "i keep the light low and swing at the bell with my staff",
+  "before": {
+    "schemaVersion": 1,
+    "revision": 7,
+    "title": "The bell tower",
+    "premise": "Explore a silent bell tower with a companion.",
+    "playerId": "player",
+    "minute": 1099,
+    "entities": [
+      { "id": "player", "kind": "character", "name": "Traveler", "description": "An observant traveler.", "locationId": "belfry", "ownerId": null, "condition": "Steady", "knownBy": ["player"] },
+      { "id": "companion", "kind": "npc", "name": "The watcher", "description": "A companion in the bell tower.", "locationId": "belfry", "ownerId": null, "condition": "Watchful", "knownBy": ["player", "companion"] },
+      { "id": "belfry", "kind": "location", "name": "The belfry", "description": "An open chamber holding a bronze bell.", "locationId": null, "ownerId": null, "condition": "Intact", "knownBy": ["player", "companion"] },
+      { "id": "journal", "kind": "item", "name": "Weathered notebook", "description": "A travel notebook.", "locationId": null, "ownerId": "player", "condition": "Worn", "knownBy": ["player"] },
+      { "id": "bell", "kind": "item", "name": "The tower bell", "description": "A great bronze bell hung in the belfry.", "locationId": "belfry", "ownerId": null, "condition": "Uncracked, rope cut", "knownBy": ["player", "companion"] }
+    ],
+    "facts": [],
+    "claims": [
+      { "id": "unsupported_staff_claim", "speakerId": "companion", "text": "Hold your staff, then. I would rather we both be ready.", "knownBy": ["player", "companion"] }
+    ],
+    "quests": [],
+    "rules": [],
+    "scheduled": []
+  },
+  "recentTurns": [
+    {
+      "id": "earlier_staff_mention",
+      "revision": 5,
+      "input": "I'll keep my staff near by and stand ready to cast any spells as needed.  let's ascend the tower. maybe there will be reasons we will learn as to why the tower still stands.",
+      "changes": ["The watcher claims: “Hold your staff, then. I would rather we both be ready.”"],
+      "narration": "You grip your staff and follow the watcher up the worn spiral."
+    }
+  ],
+  "legacyProposal": {
+    "kind": "action",
+    "interpretation": "You lower your spell-light close to the stone, then swing your staff hard at the great bell to make it sound.",
+    "clarification": null,
+    "elapsedMinutes": 2,
+    "operations": [
+      {
+        "op": "establish_fact",
+        "fact": {
+          "id": "bell_struck_by_staff",
+          "key": "tower.bell_struck_by_staff",
+          "text": "The traveler swung a staff at the great bell. The staff struck bronze with a crack, and the bell gave a single deep note.",
+          "subjects": ["player", "companion", "bell", "belfry"],
+          "at": 1099,
+          "knownBy": ["player", "companion"]
+        }
+      },
+      { "op": "update_entity", "id": "bell", "field": "condition", "value": "Uncracked, unmarked; struck; rope cut" }
+    ]
+  },
+  "expected": {
+    "blocked": true,
+    "carriedItemIds": ["journal"],
+    "missingItem": "staff",
+    "stateUnchanged": true,
+    "revision": 7,
+    "minute": 1099,
+    "bellCondition": "Uncracked, rope cut",
+    "mustNotEstablishFactId": "bell_struck_by_staff",
+    "mustNotCreateItem": "staff",
+    "mustNotNarrateSuccessfulStrike": true
+  },
+  "note": "Minimal reproduction of a live failure. The accepted legacy proposal omitted a staff entity reference entirely, so referential validation alone did not catch it. Claims and narration are not possession records. Blocking a new attempt must preserve previously committed history."
+}

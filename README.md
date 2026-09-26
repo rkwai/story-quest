@@ -20,6 +20,8 @@ The home screen is a shared adventure lobby. Start a new adventure with one clic
 
 Adventures provide phone-friendly Story, Character, Journal and World views, free-text roleplay, a typed world reducer, scoped context, persistent saves and a two-stage live DM integration. A separate scripted preview uses only three preset buttons and makes no model calls. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
 
+The Character view shows carried items, quantities and availability, with an Inventory shortcut beside the story composer. Selecting an item prepares an editable action; sending it remains explicit. Live proposals declare item use, acquisition, transfers, consumption, damage and repair, which the engine checks before any consequence commits. A missing item blocks the attempt without advancing the world. Existing saves and recorded history remain intact. See [inventory behavior and current limits](docs/inventory.md), including the remaining dependency on the DM recognizing equipment requirements in free text.
+
 ## Run
 
 ```sh
@@ -40,6 +42,7 @@ npm run build
 
 - [Product and mobile experience](docs/product.md)
 - [Architecture, truth and turn lifecycle](docs/architecture.md)
+- [Inventory and action requirements](docs/inventory.md)
 - [Implementation plan and current status](docs/implementation.md)
 - [Maintenance, diagnostics and evaluation](docs/maintenance.md)
 - [OpenRouter, Jev and model choices](docs/models.md)

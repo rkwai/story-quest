@@ -7,7 +7,7 @@ import { POST as turnPost } from '../src/app/api/turns/route';
 import { seedWorld } from '../src/engine/seed';
 import { playerView } from '../src/engine/view';
 
-const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [] };
+const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [], itemActions: [] };
 const envelope = { id: 'gen-delayed', model: 'planner/model', provider: 'Fixture',
   choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(proposal) } }] };
 function setup(t: TestContext) {
