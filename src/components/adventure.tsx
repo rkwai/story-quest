@@ -92,6 +92,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const [busy,setBusy] = useState(false);
   const [phase,setPhase] = useState('');
   const [notice,setNotice] = useState('');
+  const [responseToReveal,setResponseToReveal] = useState<{campaignId:string;turnId:string}|null>(null);
   const [ready,setReady] = useState(false);
   const [lobby,setLobby] = useState(true);
   const [campaign,setCampaign] = useState<string|null>(null);
@@ -113,6 +114,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const cancelReset = useRef<HTMLButtonElement|null>(null);
   const cancelDelete = useRef<HTMLButtonElement|null>(null);
   const composer = useRef<HTMLDivElement|null>(null);
+  const latestResponse = useRef<HTMLDivElement|null>(null);
   const actionInput = useRef<HTMLTextAreaElement|null>(null);
   const inventory = view.inventory?.filter(item=>item.quantity>0);
   const inventoryCount = inventory?.reduce((count,item)=>count+item.quantity,0) ?? view.character.possessions.length;
@@ -132,6 +134,14 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   useEffect(() => { if (resetConfirm) cancelReset.current?.focus(); }, [resetConfirm]);
   useEffect(() => { if (deleteConfirm) cancelDelete.current?.focus(); }, [deleteConfirm]);
   useEffect(() => { if (!lobby && tab==='Story' && selectedItemId) actionInput.current?.focus(); }, [lobby,tab,selectedItemId]);
+  useEffect(() => {
+    if (!responseToReveal) return;
+    setResponseToReveal(null);
+    const response=latestResponse.current;
+    if (lobby || tab!=='Story' || campaign!==responseToReveal.campaignId || response?.dataset.turnId!==responseToReveal.turnId) return;
+    response.focus({preventScroll:true});
+    response.scrollIntoView({block:'start'});
+  }, [responseToReveal,lobby,tab,campaign]);
 
   async function refreshCampaigns() {
     const request = ++listRequest.current;
@@ -258,6 +268,12 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     const next={world:result.world,turns:[...sample.turns,result.turn!]};
     setSample(next); setView(playerView(next.world)); setTurns(next.turns);
   }
+  function submitWithShortcut(event:React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || !event.ctrlKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (event.repeat || busy || !ready || !input.trim()) return;
+    event.currentTarget.form?.requestSubmit();
+  }
   async function submit(event:React.FormEvent) {
     event.preventDefault();
     const action=input.trim(); if (!campaign || !action || submitting.current || archived) return;
@@ -274,6 +290,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
       if (data.replayed) await loadCampaign(id);
       else setTurns(old=>[...old.filter(turn=>turn.id!==data.turn.id),data.turn]);
       if (!data.turn.narration) await finishNarration(data.turn.id,id);
+      setResponseToReveal({campaignId:id,turnId:data.turn.id});
     } catch (error) {
       const code=(error as Error).message;
       if (missingCampaign(code)) {
@@ -341,12 +358,12 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
       {tab==='Story' ? <>
         <div className="composer" ref={composer}>{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>
           {selectedItem&&<div className="selected-item" role="group" aria-label="Selected inventory item"><span>Selected: <strong>{selectedItem.name}</strong></span><button type="button" disabled={busy} onClick={()=>setSelectedItemId(null)} aria-label="Clear selected item"><Icon name="close"/></button></div>}
-          <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea ref={actionInput} id="action" value={input} onChange={event=>setInput(event.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
+          <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea ref={actionInput} id="action" value={input} onChange={event=>setInput(event.target.value)} onKeyDown={submitWithShortcut} aria-keyshortcuts="Control+Enter" maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" title="Send action (Ctrl+Enter)" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
           <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
           {phase&&<p className="pending" role="status"><span className="pulse"/>{phase}</p>}
           {notice&&<p className="notice" role="status">{notice}</p>}
         </div>
-        <StoryLog turns={turns} opening={OPENING} location={view.character.location} busy={busy} onRetry={campaign?turnId=>void retryNarration(turnId,campaign):undefined}/>
+        <StoryLog turns={turns} opening={OPENING} location={view.character.location} busy={busy} latestResponseRef={latestResponse} onRetry={campaign?turnId=>void retryNarration(turnId,campaign):undefined}/>
       </> : <div className="detail-body">
         {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><Inventory items={inventory} legacyPossessions={view.character.possessions} readOnly={archived||mode==='sample'} busy={busy} onAction={prepareItemAction}/><h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
         {tab==='Journal' && <><p className="eyebrow">THREADS TO FOLLOW</p><h2>Your journal</h2><p className="detail-intro">Questions worth asking. Things worth remembering.</p><QuestJournal quests={view.quests}/><h3>Discoveries</h3>{view.facts.map(f=><div className="fact" key={f.id}><span className="tiny-dot"/><p>{f.text}</p></div>)}<h3>What people say</h3>{view.claims.length ? view.claims.map(c=><blockquote key={c.id}><p>“{c.text}”</p><cite>{c.speaker} · Unverified account</cite></blockquote>) : <p className="muted">Conversations will find a place here.</p>}</>}

@@ -52,6 +52,12 @@ test('live play uses freeform input and ignores legacy generated suggestions bef
   await page.getByRole('textbox',{name:'Your action'}).fill(action);
   await page.getByRole('button',{name:'Send action'}).click();
   await expect(page.getByText('She considers your question.')).toBeVisible();
+  const response=page.locator('.latest-interaction .turn-response');
+  await expect(response).toBeFocused();
+  const positions=await page.evaluate(()=>({response:document.querySelector('.latest-interaction .turn-response')!.getBoundingClientRect().top,input:document.querySelector('.latest-interaction .player-action')!.getBoundingClientRect().top}));
+  expect(positions.response).toBeGreaterThanOrEqual(0);
+  expect(positions.response).toBeLessThan(100);
+  expect(positions.input).toBeGreaterThan(positions.response);
   expect(requests).toHaveLength(1);
   expect(requests[0].input).toBe(action);
   expect(requests[0].itemId).toBeUndefined();
@@ -75,6 +81,7 @@ test('story follows the input with newest passages first and no visible chronolo
   await expect(page.getByText('The world changed in turn 3.',{exact:true})).toBeVisible();
   const position=await page.evaluate(()=>({input:document.querySelector('.composer form')!.getBoundingClientRect().top,story:document.querySelector('.latest-interaction')!.getBoundingClientRect().top}));
   expect(position.input).toBeLessThan(position.story);
+  expect(await page.locator('.latest-interaction .narration').evaluate(element=>!!(element.compareDocumentPosition(element.closest('.turn')!.querySelector('.player-action')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   const history=page.getByRole('region',{name:'Past interactions, newest first'});
   await expect(history.locator(':scope>.turn')).toHaveCount(2);
   await expect(history.locator(':scope>.turn').first()).toContainText('My action 2.');

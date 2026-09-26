@@ -2,6 +2,10 @@
 
 Updated: 2026-09-26. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
+## Keyboard submission and response reading — September 26, 2026
+
+Ctrl+Enter in the live action input submits through the same form as the send button; Enter alone still inserts a new line. Empty drafts, pending submissions, held-key repeats and IME composition do not trigger a new request. The send button exposes the shortcut in its tooltip, and the input advertises it to assistive technology. Each interaction presents narration above the submitted action and recorded changes. When the player’s new response is ready, the viewport moves to its beginning; older narration retries keep their reading position. No model or engine behavior changes. TypeScript, all **141 regression tests**, the production build and all **15 phone browser tests** pass. A separate mocked browser check verified Enter/newline, Ctrl+Enter sending exactly one request, empty/busy/repeat/composition guards, and the two-stage turn/narration flow: no scroll while pending, then the response at 12px from the phone viewport top with the submitted action below it. No paid model calls were made. Release through GitHub master and verify the exact production commit.
+
 ## Current delivery — direction through the story (September 26, 2026)
 
 Rick removed generated preset prompts and asked the DM to provide direction within the story. Engine `1.3.0` and prompt `dm-1.5.0` retain quest scope, hierarchy, objectives, stakes, entity links and fresh progress evidence, but live `questUpdates` omit `leads` completely. Current proposal context and public projections strip legacy prompt data. `needsDirection` uses three quiet turns or missing goal metadata; it does not depend on absent buttons. The DM expresses opportunities through committed dialogue, discoveries and consequences, without action menus or a routine “What do you do next?” signoff.
@@ -10,7 +14,7 @@ Story now shows action input, newest scene, then scrollable older interactions n
 
 No database migration, reset or additional model call is required. Historical 1.0.0, 1.1.0 and 1.2.0 schemas/reducers remain available for versioned replay; current 1.3.0 turns use the new contract. Committed story traces record `directionMode: 'narrative'` instead of `surfacedLeadIds`. Existing adventures keep their world state and quest progress.
 
-Verification: TypeScript, all **141 regression tests**, the production build and all **15 phone browser tests** pass. Story and Journal screenshots were inspected with no overflow. Provider responses are mocked; no new paid playtest or improvement in real-model storytelling quality is claimed. Production deployment checks are pending; confirm that the production alias serves the released source commit before reporting success.
+Verification: TypeScript, all **141 regression tests**, the production build and all **15 phone browser tests** pass. Story and Journal screenshots were inspected with no overflow. Provider responses are mocked; no new paid playtest or improvement in real-model storytelling quality is claimed. Production commit `9fe7e75` reached READY through the native Git deployment and passed CI. The production alias served that exact commit; homepage, health and an existing adventure returned HTTP 200, with no generated suggestions in its current projection.
 
 ## Historical release — latest-first Story layout (September 26, 2026)
 
