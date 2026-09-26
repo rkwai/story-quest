@@ -8,6 +8,8 @@ The LLM is the DM and evolves a seeded, data-driven world. Record consequences b
 
 Current playtest mode is **open and shared**: no account or sign-in is required. Anyone can start, resume, reset or delete any adventure through the shared lobby. This is an explicit product decision, not an unfinished auth setup. Keep raw world state, secrets and operational traces server-only. Do not reintroduce login as a prerequisite without a new product decision.
 
+Rick's Story layout order is action input, suggested prompts, latest interaction, then scrollable past interactions newest first. Reverse presentation only; preserve chronological saved history and replay. Keep pending/errors beside the composer and do not scroll to the history bottom on new turns.
+
 ## Work and release
 
 - Implement small complete slices. Update docs/implementation.md with actual outcomes and next steps.

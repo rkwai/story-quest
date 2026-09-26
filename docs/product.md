@@ -8,6 +8,8 @@ Tell the DM what you attempt. The world responds consistently and remembers. The
 
 The home screen is a shared adventure lobby with a prominent **Start a new adventure** action and existing active/archived runs. No login or account creation intervenes. Inside an adventure, four persistent destinations: **Story**, **Character**, **Journal**, **World**. Story has generous readable text, recent actions, short committed change notes before narration, optional suggestions, and a multiline input. Enter keeps writing; an explicit button sends. Preserve input on failures. Display pending status accessibly and prevent duplicate submissions. Desktop adds breathing room without changing the interaction model.
 
+Story is ordered from top to bottom: **action input → suggested prompts → latest interaction → scrollable past story**. The latest interaction is fully readable; older interactions appear newest first in a separate bounded, keyboard-focusable history region, with the opening scene last. Before the first turn, the opening is the current story. Pending status and errors stay beside the input. Navigating into Story returns to the composer, but turn/narration updates never jump to the bottom. Stored history and replay remain chronological; only presentation is reversed.
+
 Character shows identity, condition, abilities, carried items and known relationships. Journal separates quests, discoveries and witnessed claims. World exposes discovered people/places and known rules only. Secrets stay server-side. A rumor is labeled a claim, not presented as an objective fact.
 
 ## Starting a campaign

@@ -5,6 +5,7 @@ import { playerView } from '@/engine/view';
 import { type PlayerView, type PublicTurn, type PublicLead } from '@/engine/types';
 import { Inventory, type CarriedItem, type InventoryAction } from '@/components/inventory';
 import { focusedQuest, QuestJournal, StoryGuidance } from '@/components/story-guidance';
+import { StoryLog } from '@/components/story-log';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
 type CampaignSummary = { id:string; title:string; character_name?:string; revision:number; created_at:string; updated_at:string; archived_at:string|null };
@@ -111,7 +112,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const resetRequest = useRef<{id:string;campaign:string}|null>(null);
   const cancelReset = useRef<HTMLButtonElement|null>(null);
   const cancelDelete = useRef<HTMLButtonElement|null>(null);
-  const end = useRef<HTMLDivElement|null>(null);
+  const composer = useRef<HTMLDivElement|null>(null);
   const actionInput = useRef<HTMLTextAreaElement|null>(null);
   const inventory = view.inventory?.filter(item=>item.quantity>0);
   const inventoryCount = inventory?.reduce((count,item)=>count+item.quantity,0) ?? view.character.possessions.length;
@@ -127,7 +128,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     // The initial availability flag comes from server configuration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveAvailable]);
-  useEffect(() => { if (!lobby && turns.length) end.current?.scrollIntoView({behavior:'smooth',block:'end'}); }, [turns.length,phase,lobby]);
+  useEffect(() => { if (!lobby && tab==='Story') composer.current?.scrollIntoView({block:'start'}); }, [lobby,campaign,tab]);
   useEffect(() => { if (resetConfirm) cancelReset.current?.focus(); }, [resetConfirm]);
   useEffect(() => { if (deleteConfirm) cancelDelete.current?.focus(); }, [deleteConfirm]);
   useEffect(() => { if (!lobby && tab==='Story' && selectedItemId) actionInput.current?.focus(); }, [lobby,tab,selectedItemId]);
@@ -343,24 +344,16 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     <div className="workspace"><main className="main-panel">
       <div className="chapter-bar"><span><span className="chapter-dot"/>{tab==='Story'?(view.revision===0?'THE ARRIVAL':'YOUR STORY'):tab.toUpperCase()}</span><span>{storyTime(view.minute)}</span></div>
       {tab==='Story' ? <>
-        <div className="story-body">
-          <div className="location-label"><Icon name="World"/>{view.character.location.toUpperCase()}</div>
-          <article className="opening"><p className="dropcap">{OPENING.split('\n\n')[0]}</p>{OPENING.split('\n\n').slice(1).map((paragraph,index)=><p key={index}>{paragraph}</p>)}</article>
-          <div className="divider"><span/> <Icon name="spark"/> <span/></div>
-          {turns.map(turn=><section className="turn" key={turn.id}>
-            <div className="player-action"><span className="eyebrow">YOU</span><p>{turn.input}</p></div>
-            <div className="changes"><span className="changes-label">{turn.interpretation}</span>{turn.changes.length>0&&<ul>{turn.changes.map((change,index)=><li key={index}>{change}</li>)}</ul>}</div>
-            {turn.narration?<article className="narration">{turn.narration.split('\n\n').map((paragraph,index)=><p key={index}>{paragraph}</p>)}</article>:<div className="fallback"><p>The outcome above is part of your story.</p>{campaign&&<button className="text-button" disabled={busy} onClick={()=>void retryNarration(turn.id,campaign)}>Continue the narration</button>}</div>}
-          </section>)}
-          {phase&&<p className="pending" role="status"><span className="pulse"/>{phase}</p>}
-          {notice&&<p className="notice" role="status">{notice}</p>}
-          <div ref={end}/>
-        </div>
-        <div className="composer"><StoryGuidance view={view} readOnly={archived||mode==='sample'} busy={busy} onChoose={prepareLead}/>{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>{turns.length===0&&!view.story&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);}}>{choice}<span>↗</span></button>)}</div>}
+        <div className="composer" ref={composer}>{archived?<><p className="composer-title">This run is complete</p><p className="muted">This story and its discoveries are preserved. Open Adventures to continue a current run.</p><button className="primary" onClick={showLobby}>Open adventures</button></>:mode==='sample'?<><p className="composer-title">Choose a scripted scene</p><p className="muted">Select a preset to explore the preview. Custom dialogue belongs in an AI adventure.</p><div className="suggestions sample-choices">{suggestions.map(choice=><button disabled={busy||!ready} key={choice} onClick={()=>playSample(choice)}>{choice}<span>↗</span></button>)}</div></>:<><div className="composer-heading"><p className="composer-title">What do you do?</p><button className="inventory-shortcut" type="button" onClick={()=>setTab('Character')} aria-label={`Open inventory, ${inventoryCount} ${inventoryCount===1?'item':'items'}`}>Inventory <span>{inventoryCount}</span></button></div>
           {selectedItem&&<div className="selected-item" role="group" aria-label="Selected inventory item"><span>Selected: <strong>{selectedItem.name}</strong></span><button type="button" disabled={busy} onClick={()=>setSelectedItemId(null)} aria-label="Clear selected item"><Icon name="close"/></button></div>}
           <form onSubmit={submit}><label className="sr-only" htmlFor="action">Your action</label><textarea ref={actionInput} id="action" value={input} onChange={event=>setInput(event.target.value)} maxLength={2000} rows={3} placeholder="Speak, investigate, take a chance…" disabled={busy}/><button className="send" aria-label="Send action" disabled={busy||!input.trim()||!ready}><Icon name="send"/></button></form>
           <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
+          {phase&&<p className="pending" role="status"><span className="pulse"/>{phase}</p>}
+          {notice&&<p className="notice" role="status">{notice}</p>}
+          <StoryGuidance view={view} readOnly={archived||mode==='sample'} busy={busy} onChoose={prepareLead}/>
+          {mode==='live'&&!archived&&turns.length===0&&!view.story&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);actionInput.current?.focus();}}>{choice}<span>↗</span></button>)}</div>}
         </div>
+        <StoryLog turns={turns} opening={OPENING} location={view.character.location} busy={busy} onRetry={campaign?turnId=>void retryNarration(turnId,campaign):undefined}/>
       </> : <div className="detail-body">
         {tab==='Character' && <><p className="eyebrow">YOUR CHARACTER</p><h2>{view.character.name}</h2><p className="detail-intro">A life shaped by the choices you make.</p><div className="stat-grid"><div><small>CONDITION</small><strong>{view.character.condition}</strong></div><div><small>LOCATION</small><strong>{view.character.location}</strong></div></div><Inventory items={inventory} legacyPossessions={view.character.possessions} readOnly={archived||mode==='sample'} busy={busy} onAction={prepareItemAction}/><h3>Your story so far</h3>{view.facts.filter(f=>f.subjects.includes(view.playerId)).map(f=><p key={f.id}>{f.text}</p>)}<p className="muted">Your abilities, relationships, and discoveries grow through the story.</p></>}
         {tab==='Journal' && <><p className="eyebrow">THREADS TO FOLLOW</p><h2>Your journal</h2><p className="detail-intro">Questions worth asking. Things worth remembering.</p><QuestJournal quests={view.quests}/><h3>Discoveries</h3>{view.facts.map(f=><div className="fact" key={f.id}><span className="tiny-dot"/><p>{f.text}</p></div>)}<h3>What people say</h3>{view.claims.length ? view.claims.map(c=><blockquote key={c.id}><p>“{c.text}”</p><cite>{c.speaker} · Unverified account</cite></blockquote>) : <p className="muted">Conversations will find a place here.</p>}</>}

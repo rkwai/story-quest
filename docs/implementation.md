@@ -2,6 +2,14 @@
 
 Updated: 2026-09-26. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
+## Latest-first Story layout — September 26, 2026
+
+Rick requested action input, preset prompts, latest interaction, then scrollable past interactions. The composer and its pending/error messages now lead the Story screen, followed by quest suggestions and the latest complete interaction. A separate keyboard-focusable region contains older turns in descending revision order, with the opening scene last. Before any turn, the opening remains the current scene. Saved turn arrays, API ordering and replay are unchanged.
+
+The layout no longer scrolls to the history bottom when a turn or narration updates. Entering Story positions the composer at the top. Narration recovery remains attached to each original turn ID, including older turns. The latest passage has no inner height limit; only past history scrolls independently. Archives remain read-only and the scripted preview keeps its explicit preset flow.
+
+Verification: TypeScript, all **127 existing regression tests**, the production build and all **15 existing phone browser tests** pass. The updated phone layout was visually inspected. No model calls, world-state changes or new database migration are required for this presentation update.
+
 ## Story direction — September 26, 2026
 
 Rick reported aimless wandering and proposed world, major, local and immediate quests. Research on storylets/salience, Dungeon World fronts, Blades progress clocks and LLM narrative systems supports adding explicit adaptable goals and concrete opportunities while preserving player agency. [The research and design record](story-direction.md) includes primary sources and separates established patterns from preliminary AI evidence.
