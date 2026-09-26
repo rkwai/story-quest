@@ -23,10 +23,7 @@ export function seedWorld(name = 'Rowan', premise = 'A quiet, mysterious fantasy
       guidance: {
         scope: 'arc', parentId: null, objective: 'Find a reliable account of what happened to Ashford and a concrete way to help.',
         stakes: 'What happened here may still matter to the people who remain.', entityIds: ['ashford', 'mara', 'tower'], lastProgressRevision: 0,
-        leads: [
-          { id: 'ask_woman', text: 'Ask the woman what brought her to the ruins.', action: 'Ask the woman what she is doing here, and whether there is something I can help with.', entityIds: ['mara'], evidenceFactIds: ['arrival'], evidenceClaimIds: [] },
-          { id: 'inspect_tower', text: 'Investigate the tower that survived.', action: 'Examine the surviving bell tower for clues to what happened to Ashford.', entityIds: ['tower', 'ashford'], evidenceFactIds: ['ruin'], evidenceClaimIds: [] },
-        ],
+        leads: [],
       },
     }],
     story: { focusQuestId: 'mystery', quietTurns: 0, lastProgressRevision: 0 },

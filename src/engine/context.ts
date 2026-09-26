@@ -13,9 +13,11 @@ export const CONVERSATION_CHAR_LIMIT = 6000;
 
 // Conversation supplies referents and exact player intent, never new world truth.
 // Project fields explicitly so extra persisted properties cannot cross this boundary.
+// Retire old suggestion receipts only in model context; stored turns and narrative
+// history remain unchanged.
 export function boundConversation(turns: readonly RecentPublicTurn[], maxChars = CONVERSATION_CHAR_LIMIT): RecentPublicTurn[] {
   const recent = [...turns].sort((a, b) => a.revision - b.revision).slice(-CONVERSATION_TURN_LIMIT)
-    .map(turn => ({ id: turn.id, revision: turn.revision, input: turn.input, changes: [...turn.changes], narration: turn.narration }));
+    .map(turn => ({ id: turn.id, revision: turn.revision, input: turn.input, changes: turn.changes.filter(change => !change.startsWith('Lead available: ')), narration: turn.narration }));
   while (recent.length && JSON.stringify(recent).length > Math.min(maxChars, CONVERSATION_CHAR_LIMIT)) recent.shift();
   return recent;
 }
@@ -31,6 +33,21 @@ const hasPhrase = (input: string, text: string) => {
 };
 
 type RankedQuest = { quest: Quest; score: number; reasons: string[]; relevant: boolean };
+type ContextQuest = Omit<Quest, 'guidance'> & { guidance?: Omit<NonNullable<Quest['guidance']>, 'leads'> };
+
+// Legacy 1.2 saves may still contain suggested action text. Preserve that history
+// in storage, but project only goals and grounding metadata into the live DM.
+function contextQuest(quest: Quest): ContextQuest {
+  const { id, title, description, status, knownBy, guidance } = quest;
+  return {
+    id, title, description, status, knownBy: [...knownBy],
+    ...(guidance ? { guidance: {
+      scope: guidance.scope, parentId: guidance.parentId,
+      objective: guidance.objective, stakes: guidance.stakes,
+      entityIds: [...guidance.entityIds], lastProgressRevision: guidance.lastProgressRevision
+    } } : {})
+  };
+}
 
 // This is retrieval, not intent classification: only the DM interprets what the
 // player wants. Description length and repeated filler cannot buy more context.
@@ -43,11 +60,10 @@ function rankQuests(world: World, input: string, localIds: Set<string>, mentione
   for (const quest of candidates) for (const word of meaningfulWords(quest.title)) frequency.set(word, (frequency.get(word) ?? 0) + 1);
   return candidates.map(quest => {
     const guidance = quest.guidance;
-    const references = [...(guidance?.entityIds ?? []), ...(guidance?.leads.flatMap(lead => lead.entityIds) ?? [])];
+    const references = guidance?.entityIds ?? [];
     const reasons: string[] = [];
     let score = 0;
     if (hasPhrase(normalized, quest.title) || hasPhrase(normalized, quest.id)) { score += 1000; reasons.push('explicit_quest'); }
-    if (guidance?.leads.some(lead => hasPhrase(normalized, lead.action))) { score += 1100; reasons.push('explicit_lead'); }
     if (references.some(id => mentionedIds.has(id))) { score += 600; reasons.push('referenced_entity'); }
     const matches = meaningfulWords(quest.title).filter(word => words.has(word));
     if (matches.length) { score += 200 + matches.reduce((sum, word) => sum + 10 / frequency.get(word)!, 0); reasons.push('title_match'); }
@@ -113,12 +129,7 @@ export function buildContext(world: World, input: string, maxChars = 24000, rece
   const focus = ranked.find(candidate => candidate.quest.status === 'active' && candidate.quest.knownBy.includes(world.playerId));
   const focusQuestId = focus?.quest.id ?? null;
   const quietTurns = world.story?.quietTurns ?? 0;
-  const hasActionableLead = focus?.quest.guidance?.leads.some(lead =>
-    (lead.entityIds.length + lead.evidenceFactIds.length + lead.evidenceClaimIds.length > 0)
-    && lead.entityIds.every(id => byId.get(id)?.knownBy.includes(world.playerId))
-    && lead.evidenceFactIds.every(id => factById.get(id)?.knownBy.includes(world.playerId))
-    && lead.evidenceClaimIds.every(id => claimById.get(id)?.knownBy.includes(world.playerId))
-  ) ?? false;
+  const hasObjective = Boolean(focus?.quest.guidance?.objective.trim());
   const linked = withReferences([...ids, ...facts.flatMap(fact => fact.subjects)]);
   // Ownership is a complete mechanical list, not a suggestion inferred from prose.
   // Keep it in mandatory context so optional memories cannot displace equipment.
@@ -127,21 +138,23 @@ export function buildContext(world: World, input: string, maxChars = 24000, rece
   let base = {
     title: world.title, premise: world.premise, minute: world.minute, playerId: world.playerId,
     entities: linked, inventory: { complete: true, items: inventory, selectedItemId: selectedItemId ?? null },
-    rules: world.rules, facts, claims: world.claims.filter(c => ids.has(c.speakerId)).slice(-10), quests: [] as Quest[], scheduled,
+    rules: world.rules, facts, claims: world.claims.filter(c => ids.has(c.speakerId)).slice(-10), quests: [] as ContextQuest[], scheduled,
     storyDirector: {
-      focusQuestId, selectedQuestIds: [] as string[], quietTurns, needsDirection: quietTurns >= 3 || !hasActionableLead,
-      instruction: 'Honor the exact player action or question first. Offer grounded opportunities rather than forcing a quest or changing the subject. When direction is needed, advance or refresh a relevant lead using known evidence; a lead is a possibility, not a guaranteed outcome. Resolved ancestors supply stakes, not active tasks.'
+      focusQuestId, selectedQuestIds: [] as string[], quietTurns, needsDirection: quietTurns >= 3 || !hasObjective,
+      instruction: 'Honor the exact player action or question first. Develop direction through clues, NPC dialogue and consequences committed by world operations, then narrated as story. Do not generate menus or preset player inputs. Let the player choose freely; resolved ancestors supply stakes, not active tasks.'
     },
     recentTurns: [] as RecentPublicTurn[]
   };
   function addQuests(quests: Quest[]) {
-    const allQuests = [...base.quests, ...quests.filter(quest => !base.quests.some(existing => existing.id === quest.id))];
+    const allQuests = [...base.quests, ...quests.filter(quest => !base.quests.some(existing => existing.id === quest.id)).map(contextQuest)];
     const factIds = new Set(base.facts.map(fact => fact.id)), claimIds = new Set(base.claims.map(claim => claim.id));
     const requiredEntities = new Set(base.entities.map(entity => entity.id));
     const questEntities = new Set<string>();
     for (const quest of quests) if (quest.guidance) {
       for (const id of quest.guidance.entityIds) questEntities.add(id);
-      for (const lead of quest.guidance.leads) {
+      // Legacy lead IDs can still ground established evidence; their text and
+      // action fields are never copied or used to rank live context.
+      for (const lead of quest.guidance.leads ?? []) {
         for (const id of lead.entityIds) questEntities.add(id);
         for (const id of lead.evidenceFactIds) factIds.add(id);
         for (const id of lead.evidenceClaimIds) claimIds.add(id);

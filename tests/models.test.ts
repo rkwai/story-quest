@@ -7,7 +7,7 @@ import { seedWorld } from '../src/engine/seed';
 import { playerView } from '../src/engine/view';
 import { applyProposal } from '../src/engine/reducer';
 import { buildContext } from '../src/engine/context';
-import { proposalSchema, storyWireProposalSchema } from '../src/engine/types';
+import { proposalSchema, narrativeWireProposalSchema } from '../src/engine/types';
 import duplicateDialogue from './fixtures/dialogue-duplicate-proposal.json';
 
 const proposal = { kind: 'action', interpretation: 'You wait.', clarification: null, elapsedMinutes: 1, operations: [], itemActions: [], storyPlan: { focusQuestId: null, questUpdates: [], progress: [] } };
@@ -37,7 +37,7 @@ test('proposal routes through OpenRouter with strict schema and sanitized billab
     assert.deepEqual(body.provider, { require_parameters: true });
     assert.deepEqual(body.reasoning, { effort: 'low', exclude: true });
     assert.equal(body.response_format.json_schema.strict, true);
-    assert.deepEqual(body.response_format.json_schema.schema, z.toJSONSchema(storyWireProposalSchema, { target: 'draft-7' }));
+    assert.deepEqual(body.response_format.json_schema.schema, z.toJSONSchema(narrativeWireProposalSchema, { target: 'draft-7' }));
     assert.match(body.messages[1].content, /hidden-cause/);
     return Response.json(envelope(JSON.stringify(proposal)));
   });
@@ -51,8 +51,8 @@ test('proposal routes through OpenRouter with strict schema and sanitized billab
   assert.equal(fetch.mock.callCount(), 1);
 });
 
-test('the live story schema requires every property of guidance, leads and progress in strict provider output', () => {
-  const schema = z.toJSONSchema(storyWireProposalSchema, { target: 'draft-7' });
+test('the live narrative schema has strict guidance and progress without suggested-action output', () => {
+  const schema = z.toJSONSchema(narrativeWireProposalSchema, { target: 'draft-7' });
   const checked: string[][] = [];
   function visit(node: unknown) {
     if (!node || typeof node !== 'object') return;
@@ -69,7 +69,10 @@ test('the live story schema requires every property of guidance, leads and progr
   visit(schema);
   assert.ok(checked.some(properties => properties.includes('storyPlan')));
   assert.ok(checked.some(properties => properties.includes('questUpdates')));
-  assert.ok(checked.some(properties => properties.includes('evidenceFactIds')));
+  assert.ok(checked.every(properties => !properties.includes('leads')));
+  assert.ok(checked.every(properties => !properties.includes('evidenceFactIds')));
+  const updates = checked.find(properties => properties.includes('questId') && properties.includes('objective'));
+  assert.deepEqual(updates, ['entityIds', 'objective', 'parentId', 'questId', 'scope', 'stakes']);
   assert.ok(checked.some(properties => properties.includes('claimIds')));
 });
 

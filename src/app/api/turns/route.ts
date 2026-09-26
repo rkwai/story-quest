@@ -6,15 +6,15 @@ import { reviewProposal } from '@/server/typesafe';
 import { recentConversation } from '@/server/conversation';
 import { buildContext } from '@/engine/context';
 import { InventoryError, inventoryActionChanges, itemState } from '@/engine/inventory';
-import { applyStoryProposal, StoryError } from '@/engine/story';
+import { applyNarrativeProposal, StoryError } from '@/engine/story';
 import { playerView, publicChanges } from '@/engine/view';
-import { ENGINE_VERSION, EngineError, type World, type PublicTurn, type StoryProposal } from '@/engine/types';
+import { ENGINE_VERSION, EngineError, type World, type PublicTurn, type NarrativeProposal } from '@/engine/types';
 // Includes the 120s proposal deadline, advisory review and persistence margin.
 export const maxDuration = 150;
 const inputSchema = z.object({ campaignId: z.uuid(), turnId: z.uuid(), revision: z.number().int().min(0), input: z.string().trim().min(1).max(2000), itemId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/).optional() });
 export async function POST(request: Request) {
   let acquired: { campaign: string; owner: string; turn: string } | undefined;
-  let candidate: StoryProposal | undefined;
+  let candidate: NarrativeProposal | undefined;
   const start = performance.now();
   try {
     requireSameOrigin(request);
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     await trace(body.campaignId, body.turnId, 'proposal', answer.metrics.durationMs, answer.metrics);
     candidate = answer.data;
     if (body.itemId && answer.data.kind !== 'clarification' && !answer.data.itemActions.some(action => action.itemId === body.itemId)) throw new InventoryError('INVENTORY_ACTION_REQUIRED');
-    const after = applyStoryProposal(before, answer.data);
+    const after = applyNarrativeProposal(before, answer.data);
     const review = await reviewProposal(context.state, body.input, answer.data);
     await trace(body.campaignId, body.turnId, 'typesafe_review', review.durationMs, review);
     if (answer.data.kind === 'clarification') {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       story: { status: 'validated', focusQuestId: after.story?.focusQuestId ?? null,
         quietTurnsBefore: before.story?.quietTurns ?? 0, quietTurns: after.story?.quietTurns ?? 0,
         progress: answer.data.storyPlan.progress, updatedQuestIds: answer.data.storyPlan.questUpdates.map(update => update.questId),
-        surfacedLeadIds: playerView(after).story?.leads.map(lead => lead.id) ?? [] }
+        directionMode: 'narrative' }
     });
     return Response.json({ turn: committed, view: playerView(after) });
   } catch (e) {

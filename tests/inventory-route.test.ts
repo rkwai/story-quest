@@ -2,17 +2,17 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { POST as turnPost } from '../src/app/api/turns/route';
 import { seedWorld } from '../src/engine/seed';
-import type { StoryProposal, PublicTurn, World } from '../src/engine/types';
+import type { NarrativeProposal, PublicTurn, World } from '../src/engine/types';
 
 const campaignId = '11111111-1111-4111-8111-111111111111';
 const turnId = '22222222-2222-4222-8222-222222222222';
 const owner = '33333333-3333-4333-8333-333333333333';
-const proposal: StoryProposal = {
+const proposal: NarrativeProposal = {
   kind: 'action', interpretation: 'You use the item.', clarification: null,
   elapsedMinutes: 1, operations: [], itemActions: [], storyPlan: { focusQuestId: 'mystery', questUpdates: [], progress: [] },
 };
 type Trace = { stage: string; details: Record<string, unknown> };
-type Commit = { p_state: World; p_proposal: StoryProposal; p_result: PublicTurn };
+type Commit = { p_state: World; p_proposal: NarrativeProposal; p_result: PublicTurn };
 
 function request(input: string, itemId?: string) {
   return new Request('https://story.example/api/turns', {
@@ -83,7 +83,7 @@ function assertUncommitted(fixture: ReturnType<typeof setup>, expectedProposalCa
 
 test('using an absent staff blocks every proposed consequence and releases the turn', async t => {
   const world = seedWorld(), original = structuredClone(world);
-  const candidate: StoryProposal = {
+  const candidate: NarrativeProposal = {
     ...proposal, interpretation: 'You use your staff to clear the fallen stones.',
     itemActions: [{ action: 'use', itemId: null, quantity: 1, recipientId: null }],
     operations: [{ op: 'establish_fact', fact: { id: 'cleared_stones', key: 'stones.cleared',
@@ -97,7 +97,7 @@ test('using an absent staff blocks every proposed consequence and releases the t
   assert.deepEqual(world, original);
   const rejected = fixture.traces.find(trace => trace.stage === 'failed')!;
   assert.equal(rejected.details.code, 'ITEM_REQUIRED');
-  assert.deepEqual((rejected.details.rejectedProposal as StoryProposal).itemActions, candidate.itemActions);
+  assert.deepEqual((rejected.details.rejectedProposal as NarrativeProposal).itemActions, candidate.itemActions);
   assert.deepEqual(rejected.details.inventory, { status: 'blocked', code: 'ITEM_REQUIRED' });
 });
 
@@ -119,7 +119,7 @@ test('taking a known nearby staff and then using it commits once before narratio
     ownerId: null, locationId: 'ashford', condition: 'Sound', knownBy: ['player'],
     itemState: { quantity: 1, usable: true, consumable: false } });
   const original = structuredClone(world);
-  const candidate: StoryProposal = { ...proposal,
+  const candidate: NarrativeProposal = { ...proposal,
     itemActions: [
       { action: 'take', itemId: 'fallen_staff', quantity: 1, recipientId: null },
       { action: 'use', itemId: 'fallen_staff', quantity: 1, recipientId: null },
@@ -166,7 +166,7 @@ test('a selected carried item must be included in the proposed inventory actions
 });
 
 test('a selected carried notebook can be used without consuming or recreating it', async t => {
-  const candidate: StoryProposal = { ...proposal,
+  const candidate: NarrativeProposal = { ...proposal,
     itemActions: [{ action: 'use', itemId: 'journal', quantity: 1, recipientId: null }],
   };
   const fixture = setup(t, candidate);

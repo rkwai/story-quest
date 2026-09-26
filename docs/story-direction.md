@@ -1,6 +1,6 @@
 # Story direction
 
-StoryQuest needs the DM to give the player a reason to act, a concrete next lead and visible consequences over time. A persistent world can be internally consistent yet still feel directionless. This slice adds a small narrative director to the existing proposal/commit/narration pipeline. It does not prescribe an ending or require the player to follow a main quest.
+StoryQuest needs the DM to give the player a reason to act, an understandable opportunity and visible consequences over time. A persistent world can be internally consistent yet still feel directionless. A small narrative director supplies goals within the existing proposal/commit/narration pipeline. Direction reaches the player through the story, with no generated preset prompts or command buttons. It does not prescribe an ending or require the player to follow a main quest.
 
 This is a prototype informed by established interactive-narrative techniques, not a claim that one architecture is universally best. See [implementation status](implementation.md) for verification and deployment results; this document describes the contract and its limits.
 
@@ -28,7 +28,7 @@ The resulting design combines optional hierarchical objectives, bounded context 
 
 These examples are fictional design illustrations, not new facts about any saved adventure. A parent link expresses a relationship between objectives and must point to an existing quest at a strictly broader scope; self-links and cycles are invalid. The engine does not require all four scopes, populate missing levels automatically, or make every local interaction serve the same world quest. Independent stories remain possible.
 
-World lore and historical facts constrain the DM. A quest objective states a desired or investigated outcome; it does not establish that the outcome happened. A lead suggests something to try; it does not guarantee success. An NPC's testimony remains a claim even when it helps an investigation.
+World lore and historical facts constrain the DM. A quest objective states a desired or investigated outcome; it does not establish that the outcome happened. An opportunity conveyed in the story does not guarantee success. An NPC's testimony remains a claim even when it helps an investigation.
 
 ## State contract
 
@@ -37,18 +37,17 @@ Existing quests retain their ID, title, description, status and knowledge list. 
 - `scope` and nullable `parentId` for organization.
 - `objective` and `stakes` for what the quest is trying to achieve and why it matters.
 - `entityIds` linking the quest to relevant characters, places or items.
-- Up to three `leads`, each with a stable ID, short display text, editable action text, linked entities, and supporting fact/claim IDs.
 - `lastProgressRevision`, maintained by the engine.
 
 Optional world `story` state records `focusQuestId`, `quietTurns` and `lastProgressRevision`. This is direction metadata, not a second source of world truth.
 
-Engine 1.2.0 live proposals include a required `storyPlan` alongside `itemActions` and ordinary operations:
+Engine 1.3.0 live proposals include a required `storyPlan` alongside `itemActions` and ordinary operations. Prompt `dm-1.5.0` does not request preset player prompts, and live `questUpdates` omit `leads` entirely:
 
 ```ts
 {
   focusQuestId: string | null,
   questUpdates: [ // at most three
-    { questId, scope, parentId, objective, stakes, entityIds, leads }
+    { questId, scope, parentId, objective, stakes, entityIds }
   ],
   progress: [ // at most three
     { questId, factIds, claimIds }
@@ -58,9 +57,9 @@ Engine 1.2.0 live proposals include a required `storyPlan` alongside `itemAction
 
 The existing operations still create quests and mark them completed or failed. `storyPlan` supplies direction and evidence around those changes; it is not an unrestricted state patch. The engine checks references, quest hierarchy and visibility before accepting the complete turn. Invalid direction metadata rejects the candidate atomically, preserving the previous world. A live action must choose a known active focus when such quests exist; otherwise it uses `null`. A clarification carries a null focus and empty updates/progress and changes no world state.
 
-Progress must point to supported evidence rather than simply assert that the story advanced. For a player-known quest, every cited fact or claim must be known to the player after the turn and must either be newly created or newly learned by that player. Reusing already known testimony does not count. Where guidance has evidence/entity links, at least one cited record must overlap those links through its ID, subjects or speaker. Completing or failing a quest also requires progress evidence for that quest in the same proposal; completing a child never automatically completes its parent. A quest cannot be added and resolved in the same turn, even if evidence is supplied; this prevents manufacturing instant completed goals.
+Progress must point to supported evidence rather than simply assert that the story advanced. For a player-known quest, every cited fact or claim must be known to the player after the turn and must either be newly created or newly learned by that player. Reusing already known testimony does not count. Where guidance has entity links, at least one cited record must connect through its subjects or speaker. Completing or failing a quest also requires progress evidence for that quest in the same proposal; completing a child never automatically completes its parent. A quest cannot be added and resolved in the same turn, even if evidence is supplied; this prevents manufacturing instant completed goals.
 
-Hidden quests may use new private evidence or evidence newly learned by their observers, but hidden progress does not reset the player's quiet-turn counter. Each lead must cite at least one entity, fact or claim, and all its references must be known to every character that knows that quest.
+Hidden quests may use new private evidence or evidence newly learned by their observers, but hidden progress does not reset the player's quiet-turn counter. Historical 1.2.0 proposals retain their original lead-reference validation during replay; current live proposals neither author nor expose lead commands.
 
 These checks establish freshness, visibility and structural overlap, not semantic progress. A model could still cite a shallow fact about the right entity or testimony that does not answer the objective. That requires evaluation and, later, stronger quest-specific conditions.
 
@@ -70,7 +69,7 @@ The proposal reducer remains responsible for inventory, chronology, immutable fa
 
 The director runs within the existing DM proposal. There is no separate planning-model call, one-call-per-quest loop or background work while the player is away. Richer metadata can change token usage, so preserving call count is not a claim of identical cost.
 
-Context selection uses state and bounded deterministic ranking, with at most six quests. Explicit quest/lead references and relevant entity mentions outrank broad title matches, current-scene links and saved focus. Immediate scope helps break ties. The selected known active focus and its ancestor chain are mandatory, including terminal ancestors that explain the current objective. Their supporting facts, claims and entity owner/location references are included as well.
+Context selection uses state and bounded deterministic ranking, with at most six quests. Explicit quest references and relevant entity mentions outrank broad title matches, current-scene links and saved focus. Immediate scope helps break ties. The selected known active focus and its ancestor chain are mandatory, including terminal ancestors that explain the current objective. Related facts, claims and entity owner/location references are included as well. Current context strips legacy lead prompts and does not rank quests by old suggested action text.
 
 Other relevant quests enter as optional complete bundles with their ancestry and evidence; a bundle that exceeds the quest count or character budget is omitted. There is no unbounded summary of every quest. Hidden relevant quests may be optional DM context, but cannot become the public focus. The full inventory, applicable rules and deadline obligations keep their existing priority. The context manifest records selected quest IDs, selection reasons, excluded quest count and selected claim IDs. Mandatory context overflow still fails closed rather than silently removing required state.
 
@@ -78,23 +77,23 @@ The DM should first respond to what the player actually attempted. Asking a woma
 
 Direction means the player can identify an available next step. It can come from a new clue, a witness's request, an obstacle made clearer, a changed relationship or a consequence of an earlier choice. The player may reject the lead, pursue another goal or continue exploring.
 
-`quietTurns` is a pacing signal derived from recorded progress. It is not a verdict that a conversation is boring and is not a timer that forces disaster. The director sets `needsDirection` after three quiet turns or when there is no player-known grounded lead. This gives the DM stronger guidance to offer a concrete next step. Rest, deliberate character interaction and exploration remain valid. No clock, deadline, quest completion or historical fact advances solely because the quiet-turn counter increases.
+`quietTurns` is a pacing signal derived from recorded progress. It is not a verdict that a conversation is boring and is not a timer that forces disaster. The director sets `needsDirection` after three quiet turns or when the focused quest lacks goal metadata. It does not test for missing preset prompts. This gives the DM stronger guidance to develop a concrete opportunity in the story. Rest, deliberate character interaction and exploration remain valid. No clock, deadline, quest completion or historical fact advances solely because the quiet-turn counter increases.
 
 Completed or failed quests explicitly named by title or ID remain eligible as optional historical context, never as an active focus.
 
-Commit still precedes narration. The narrator receives only the public outcome, known quest direction and other projected knowledge. It may present committed leads naturally but cannot invent a new quest or clue to satisfy a pacing instruction. Narration receives only the focused quest, its visible ancestors and quests explicitly changed by the committed turn, rather than the full public journal. Mandatory public facts still have the existing 24,000-character narration limit; long-history fact retrieval remains future work.
+Commit still precedes narration. The narrator receives only the public outcome, known quest direction and other projected knowledge. It can make an opportunity apparent through committed dialogue, discoveries, obstacles or consequences, but cannot invent a new quest or clue to satisfy a pacing instruction. It does not append a command menu or routine “What do you do next?” signoff. Narration receives only the focused quest, its visible ancestors and quests explicitly changed by the committed turn, rather than the full public journal. Mandatory public facts still have the existing 24,000-character narration limit; long-history fact retrieval remains future work.
 
 ## Player experience and knowledge boundary
 
-The Story view surfaces a current lead close to the action composer. Selecting a suggested action prepares editable text; it does not submit a turn or force the character's choice. The Journal provides broader quest context: scope, objective, stakes and available leads. Existing freeform input remains the primary interaction.
+The Story view places the action input first, the newest scene next, then independently scrollable older interactions newest first. It has no visible “Latest interaction” or “Past story” headings. Saved history and replay remain chronological. Freeform input is the live narrative interaction; the DM gives guidance within its story rather than generating preset player commands.
 
-Only known quests and permissible referenced entities/evidence belong in player projections. Hidden parent relationships must not reveal an undiscovered arc. Old quests without direction metadata remain readable. When no authored/committed leads are available for the active focus, the projection can offer generic attempts based only on the current known scene, such as asking a present NPC for information or examining a known landmark. These are possible investigations, not assertions that the NPC knows an answer or the landmark holds a clue.
+The Journal retains broader quest context: scope, parent, objective and stakes. It has no “Known leads” action list. Current public projections emit no lead commands, including saved legacy prompts and generic scene-derived fallback suggestions. Exact historical `Lead available:` change receipts are hidden when rendering, without rewriting their accepted turn records. Fixed inventory controls and the explicitly labeled no-AI preview buttons remain available.
 
-Reference checks cannot prove that arbitrary `objective`, `stakes`, lead or narration text contains no spoiler. The DM must express public guidance using knowledge already available to the player, and semantic leakage remains an evaluation target. An unknown-to-player fact stays established truth on the server; it must not become a public lead merely because it would help advance the plot.
+Only known quests belong in player projections, and hidden parent relationships must not reveal an undiscovered arc. Old quests without direction metadata remain readable. Reference checks cannot prove that arbitrary `objective`, `stakes` or narration text contains no spoiler. The DM must express public guidance using knowledge already available to the player, and semantic leakage remains an evaluation target. An unknown-to-player fact stays established truth on the server; it must not become a public hint merely because it would help advance the plot.
 
 ## TypeSafe / Jev
 
-Jev is a plausible fit for questions such as whether a candidate lead addresses the player's current interest or whether a proposal repeats a previous lead. These should be narrow questions over bounded candidates, with deterministic logic combining the answers.
+Jev is a plausible fit for questions such as whether a candidate quest relates to the player's current interest or whether a proposed development repeats an earlier hint. These should be narrow questions over bounded candidates, with deterministic logic combining the answers.
 
 For this slice, the existing optional shadow review includes two additional narrow judgments: whether cited progress materially advances its objective, and whether quest pressure displaces the player’s exact topic. It remains a single bounded advisory request, cannot choose world truth and cannot block progress when unavailable. No new serial pre-context selector is required.
 
@@ -102,20 +101,20 @@ A Jev reranker for optional quest context is deferred until recorded examples sh
 
 ## Compatibility and maintenance
 
-Direction metadata is additive; existing snapshots and quests remain valid. Existing adventures can acquire guidance through accepted new turns. Do not rewrite their historical proposals, inject outcomes into old narration or require a reset to use the feature.
+Existing snapshots and quests remain valid; no database migration or reset is required. Existing adventures can acquire or update goal metadata through accepted new turns. Historical 1.2.0 lead data remains compatible in saved snapshots and proposals, but is omitted from current context and public projection. Do not rewrite historical proposals or inject outcomes into old narration.
 
-Versioned replay must preserve the original 1.0.0 and inventory 1.1.0 reducers and apply the story-aware reducer to 1.2.0 turns. Replay does not call a model. After story-aware turns exist, roll forward or use a release that understands them; an older application can discard or ignore new direction metadata.
+Versioned replay preserves the 1.0.0, 1.1.0 and 1.2.0 contracts and applies the current narrative-direction contract to 1.3.0 turns. Replay does not call a model. Roll forward or use a release that understands every recorded version; an older application can discard or ignore new direction metadata.
 
-Inspect selected quest IDs, focus, progress evidence, quiet-turn counts and rejected plans alongside ordinary turn traces. Keep these diagnostics private. Compare the proposed direction, committed state, projected lead and actual narration when investigating a report; they represent different stages and can fail separately.
+Inspect selected quest IDs, focus, progress evidence, quiet-turn counts and rejected plans alongside ordinary turn traces. Current committed story diagnostics record `directionMode: 'narrative'` instead of `surfacedLeadIds`. Keep these diagnostics private. Compare the proposed direction, committed state, projected goals and actual narration when investigating a report; they represent different stages and can fail separately.
 
 ## Evaluation and next steps
 
-Automated tests should cover invalid/cyclic hierarchy, hidden references, missing progress evidence, atomic rejection, legacy saves, mixed-version replay and mobile editable-lead behavior. Mocked tests establish contract behavior, not creative quality.
+Automated tests should cover invalid/cyclic hierarchy, hidden references, missing progress evidence, atomic rejection, legacy saves, mixed-version replay and omission of generated prompts from live schemas/context/projections. Phone checks cover freeform input, the newest scene, unlabeled scrollable history and retained Journal goals. Mocked tests establish contract behavior, not creative quality.
 
 Use explicitly authorized multi-turn playtests to measure:
 
 - **Direction:** how often the player has a concrete, currently possible next step; consecutive turns without meaningful change.
-- **Repetition:** repeated lead IDs/text and re-delivery of already learned information.
+- **Repetition:** repeated narrative hints and re-delivery of already learned information.
 - **Agency:** whether the DM preserves the exact topic, accepts a declined lead and supports a different reasonable approach.
 - **Consequences:** whether cited progress changes knowledge, access, relationships, obstacles or quest status in a meaningful way.
 - **Continuity and secrecy:** unsupported causes, premature reveals and facts contradicted across turns.

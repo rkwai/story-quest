@@ -1,5 +1,5 @@
 import { applyProposal } from './reducer';
-import { applyStoryProposal } from './story';
+import { applyNarrativeProposal, applyStoryProposal } from './story';
 import { EngineError, inventoryProposalSchema, inventoryWireProposalSchema, itemStateSchema, type Entity, type InventoryProposal, type ItemAction, type ItemState, type Proposal, type World } from './types';
 
 // Error messages are codes only: a rejected model-provided item name may contain a secret.
@@ -145,6 +145,7 @@ export function replayVersioned(seed: World, turns: readonly VersionedProposal[]
     if (turn.engine_version === '1.0.0') return applyProposal(world, turn.proposal as Proposal);
     if (turn.engine_version === '1.1.0') return applyInventoryProposal(world, turn.proposal);
     if (turn.engine_version === '1.2.0') return applyStoryProposal(world, turn.proposal);
+    if (turn.engine_version === '1.3.0') return applyNarrativeProposal(world, turn.proposal);
     throw new EngineError('UNSUPPORTED_ENGINE_VERSION');
   }, structuredClone(seed));
 }

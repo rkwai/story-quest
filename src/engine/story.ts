@@ -1,7 +1,7 @@
 import { applyInventoryProposal, parseInventoryProposal } from './inventory';
 import {
-  EngineError, storyProposalSchema, storyWireProposalSchema,
-  type PublicLead, type PublicStoryDirection, type Quest, type QuestGuidance,
+  EngineError, storyProposalSchema, storyWireProposalSchema, narrativeProposalSchema, narrativeWireProposalSchema,
+  type PublicStoryDirection, type Quest, type QuestGuidance, type NarrativeProposal,
   type QuestLead, type StoryProposal, type World,
 } from './types';
 
@@ -27,13 +27,6 @@ function visibleLead(world: World, lead: QuestLead, characterId: string): boolea
     && lead.evidenceClaimIds.every(id => world.claims.some(claim => claim.id === id && knows(claim, characterId)));
 }
 
-export function publicQuestLeads(world: World, quest: Quest): PublicLead[] {
-  if (quest.status !== 'active' || !knows(quest, world.playerId)) return [];
-  return (quest.guidance?.leads ?? []).filter(lead => visibleLead(world, lead, world.playerId)).map(lead => ({
-    id: lead.id, questId: quest.id, text: lead.text, action: lead.action, entityIds: [...lead.entityIds],
-  }));
-}
-
 /** Prefer the committed focus; otherwise use current, known scene data only. */
 export function effectiveStoryFocus(world: World): string | null {
   const active = world.quests.filter(quest => quest.status === 'active' && knows(quest, world.playerId));
@@ -43,40 +36,13 @@ export function effectiveStoryFocus(world: World): string | null {
   const localIds = new Set(world.entities.filter(entity => knows(entity, world.playerId)
     && (entity.id === player?.locationId || (player?.locationId != null && entity.locationId === player.locationId))).map(entity => entity.id));
   const score = (quest: Quest) => (quest.guidance?.entityIds.some(id => localIds.has(id)) ? 100 : 0)
-    + (publicQuestLeads(world, quest).length ? 10 : 0) + scopeRank[quest.guidance?.scope ?? 'local'];
+    + scopeRank[quest.guidance?.scope ?? 'local'];
   return [...active].sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id))[0]?.id ?? null;
 }
 
-/** Generic attempts for old saves, derived from the current scene, never a fixed opening. */
-function fallbackLeads(world: World, quest: Quest): PublicLead[] {
-  const player = world.entities.find(entity => entity.id === world.playerId);
-  if (!player?.locationId) return [];
-  const visible = world.entities.filter(entity => knows(entity, world.playerId));
-  const location = visible.find(entity => entity.id === player.locationId && entity.kind === 'location');
-  const npcs = visible.filter(entity => entity.kind === 'npc' && entity.locationId === player.locationId).sort((a, b) => a.id.localeCompare(b.id));
-  const landmarks = visible.filter(entity => entity.kind === 'location' && entity.locationId === player.locationId).sort((a, b) => a.id.localeCompare(b.id));
-  const leads: PublicLead[] = [];
-  if (npcs[0]) {
-    const npc = npcs[0];
-    leads.push({ id: `ask_${npc.id}`.slice(0, 80), questId: quest.id, text: `Ask ${npc.name} for a lead.`, action: `Ask ${npc.name} what they know about "${quest.title}" and what I could investigate next.`, entityIds: [npc.id] });
-  }
-  if (landmarks[0]) {
-    const landmark = landmarks[0];
-    leads.push({ id: `inspect_${landmark.id}`.slice(0, 80), questId: quest.id, text: `Investigate ${landmark.name}.`, action: `Examine ${landmark.name} for anything connected to "${quest.title}".`, entityIds: [landmark.id] });
-  } else if (location) {
-    leads.push({ id: `look_${location.id}`.slice(0, 80), questId: quest.id, text: `Look for a lead in ${location.name}.`, action: `Look around ${location.name} for anything connected to "${quest.title}".`, entityIds: [location.id] });
-  }
-  return leads.slice(0, 2);
-}
-
+/** Current projections expose direction, never a generated player command. */
 export function publicStoryDirection(world: World): PublicStoryDirection {
-  const focusQuestId = effectiveStoryFocus(world);
-  const quest = world.quests.find(candidate => candidate.id === focusQuestId);
-  const leads = quest ? publicQuestLeads(world, quest) : [];
-  return {
-    focusQuestId, quietTurns: world.story?.quietTurns ?? 0,
-    leads: quest ? (leads.length ? leads : fallbackLeads(world, quest)) : [],
-  };
+  return { focusQuestId: effectiveStoryFocus(world), quietTurns: world.story?.quietTurns ?? 0 };
 }
 
 function validateGuidance(world: World, quest: Quest) {
@@ -196,4 +162,25 @@ export function applyStoryProposal(before: World, raw: unknown): World {
     lastProgressRevision: publicProgress ? after.revision : before.story?.lastProgressRevision ?? before.revision,
   };
   return after;
+}
+
+/** Engine 1.3 proposal contract deliberately excludes legacy lead commands. */
+export function parseNarrativeProposal(raw: unknown): NarrativeProposal {
+  const wire = narrativeWireProposalSchema.parse(raw);
+  return narrativeProposalSchema.parse({ ...parseInventoryProposal(wire), storyPlan: wire.storyPlan });
+}
+
+export function applyNarrativeProposal(before: World, raw: unknown): World {
+  const proposal = narrativeProposalSchema.parse(raw);
+  // Reuse the established hierarchy, evidence, pacing and atomicity checks.
+  // This is an internal compatibility shape only: accepted 1.3 proposals never
+  // contain leads, and existing saved leads remain untouched unless that quest
+  // is explicitly updated. Historical 1.2 replay still has its original schema.
+  return applyStoryProposal(before, {
+    ...proposal,
+    storyPlan: {
+      ...proposal.storyPlan,
+      questUpdates: proposal.storyPlan.questUpdates.map(update => ({ ...update, leads: [] })),
+    },
+  });
 }

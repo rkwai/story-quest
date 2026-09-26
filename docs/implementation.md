@@ -2,7 +2,19 @@
 
 Updated: 2026-09-26. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
 
-## Latest-first Story layout — September 26, 2026
+## Current delivery — direction through the story (September 26, 2026)
+
+Rick removed generated preset prompts and asked the DM to provide direction within the story. Engine `1.3.0` and prompt `dm-1.5.0` retain quest scope, hierarchy, objectives, stakes, entity links and fresh progress evidence, but live `questUpdates` omit `leads` completely. Current proposal context and public projections strip legacy prompt data. `needsDirection` uses three quiet turns or missing goal metadata; it does not depend on absent buttons. The DM expresses opportunities through committed dialogue, discoveries and consequences, without action menus or a routine “What do you do next?” signoff.
+
+Story now shows action input, newest scene, then scrollable older interactions newest first. Generated action buttons, the Journal “Known leads” list and visible “Latest interaction” / “Past story” headings are removed. Quest goals remain in the Journal. Exact legacy `Lead available:` change receipts are hidden when rendering; immutable accepted history is untouched. Fixed inventory controls and the clearly labeled no-AI preview buttons remain available.
+
+No database migration, reset or additional model call is required. Historical 1.0.0, 1.1.0 and 1.2.0 schemas/reducers remain available for versioned replay; current 1.3.0 turns use the new contract. Committed story traces record `directionMode: 'narrative'` instead of `surfacedLeadIds`. Existing adventures keep their world state and quest progress.
+
+Verification: TypeScript, all **141 regression tests**, the production build and all **15 phone browser tests** pass. Story and Journal screenshots were inspected with no overflow. Provider responses are mocked; no new paid playtest or improvement in real-model storytelling quality is claimed. Production deployment checks are pending; confirm that the production alias serves the released source commit before reporting success.
+
+## Historical release — latest-first Story layout (September 26, 2026)
+
+The generated suggestions and visible chronology labels described below are superseded by the current delivery above; the input-first and reverse-history presentation remains.
 
 Rick requested action input, preset prompts, latest interaction, then scrollable past interactions. The composer and its pending/error messages now lead the Story screen, followed by quest suggestions and the latest complete interaction. A separate keyboard-focusable region contains older turns in descending revision order, with the opening scene last. Before any turn, the opening remains the current scene. Saved turn arrays, API ordering and replay are unchanged.
 
@@ -10,7 +22,9 @@ The layout no longer scrolls to the history bottom when a turn or narration upda
 
 Verification: TypeScript, all **127 existing regression tests**, the production build and all **15 existing phone browser tests** pass. The updated phone layout was visually inspected. No model calls, world-state changes or new database migration are required for this presentation update.
 
-## Story direction — September 26, 2026
+## Historical release — story direction (September 26, 2026)
+
+The 1.2.0 lead-generation contract, prompt buttons and surfaced-lead diagnostics below are superseded by engine 1.3.0. This section records the earlier release and verification; its historical replay behavior is preserved.
 
 Rick reported aimless wandering and proposed world, major, local and immediate quests. Research on storylets/salience, Dungeon World fronts, Blades progress clocks and LLM narrative systems supports adding explicit adaptable goals and concrete opportunities while preserving player agency. [The research and design record](story-direction.md) includes primary sources and separates established patterns from preliminary AI evidence.
 
@@ -24,7 +38,7 @@ Verification: TypeScript, all **127 regression tests**, the production build and
 
 Private traces now capture selected quests/reasons, focus, before/after quiet counts, cited progress, updated quest IDs, surfaced lead IDs and rejected story codes. No additional trace-write stage is introduced. These records support tuning repetition, false progress, topic fidelity and context cost against actual play.
 
-## Current delivery — open shared playtest (2026-09-18)
+## Historical release — open shared playtest (2026-09-18)
 
 Rick explicitly removed login and requested that anyone be able to start, resume and delete any adventure. The default entry becomes a shared lobby with one-click default creation and optional customization; the scripted preview is secondary. No email, account creation or anonymous Supabase Auth identity is required.
 

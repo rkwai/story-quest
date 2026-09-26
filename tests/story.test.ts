@@ -1,12 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { seedWorld } from '../src/engine/seed';
+import { seedWorld as currentSeedWorld } from '../src/engine/seed';
 import { applyProposal } from '../src/engine/reducer';
 import { applyInventoryProposal, replayVersioned } from '../src/engine/inventory';
 import { applyStoryProposal, effectiveStoryFocus, parseStoryProposal, publicStoryDirection } from '../src/engine/story';
 import { playerView, publicChanges } from '../src/engine/view';
 import { storyWireProposalSchema, worldSchema, type Operation, type Quest, type StoryPlan, type StoryProposal, type World } from '../src/engine/types';
+
+// Preserve a representative 1.2 saved seed rather than deriving old replay
+// expectations from the current seed's presentation policy.
+function seedWorld(): World {
+  const world = currentSeedWorld();
+  world.quests[0].guidance!.leads = [
+    { id: 'ask_woman', text: 'Ask the woman what brought her to the ruins.', action: 'Ask the woman what she is doing here, and whether there is something I can help with.', entityIds: ['mara'], evidenceFactIds: ['arrival'], evidenceClaimIds: [] },
+    { id: 'inspect_tower', text: 'Investigate the tower that survived.', action: 'Examine the surviving bell tower for clues to what happened to Ashford.', entityIds: ['tower', 'ashford'], evidenceFactIds: ['ruin'], evidenceClaimIds: [] },
+  ];
+  return world;
+}
 
 function plan(changes: Partial<StoryPlan> = {}): StoryPlan {
   return { focusQuestId: 'mystery', questUpdates: [], progress: [], ...changes };
@@ -48,28 +59,29 @@ test('story wire requires every property, forbids unknown properties, and preser
   if (parsed.operations[0].op === 'create_entity') assert.ok(!Object.hasOwn(parsed.operations[0].entity, 'itemState'));
 });
 
-test('the new seed offers safe concrete leads without changing the established mystery', () => {
-  const world = seedWorld();
+test('the current seed retains the objective without generating preset player commands', () => {
+  const world = currentSeedWorld();
   assert.equal(world.quests.length, 1);
   assert.equal(world.quests[0].guidance?.scope, 'arc');
   assert.equal(world.quests[0].guidance?.parentId, null);
-  assert.equal(playerView(world).story?.leads.length, 2);
+  assert.deepEqual(world.quests[0].guidance?.leads, []);
+  assert.ok(!Object.hasOwn(playerView(world).story!, 'leads'));
+  assert.ok(!Object.hasOwn(playerView(world).quests[0], 'leads'));
   assert.doesNotMatch(JSON.stringify(playerView(world)), /Hollow Choir|buried bell|evidenceFactIds|lastProgressRevision/);
   assert.deepEqual(worldSchema.parse(world), world);
 });
 
-test('legacy saves receive grounded current-scene direction without mutations or historical upgrades', () => {
+test('legacy saves retain focus without commands, mutations or historical upgrades', () => {
   const world = seedWorld(); delete world.story; delete world.quests[0].guidance;
   const saved = structuredClone(world);
   const direction = publicStoryDirection(world);
   assert.equal(direction.focusQuestId, 'mystery');
-  assert.ok(direction.leads.some(lead => lead.entityIds.includes('mara')));
-  assert.ok(direction.leads.some(lead => lead.entityIds.includes('tower')));
+  assert.ok(!Object.hasOwn(direction, 'leads'));
   assert.deepEqual(world, saved);
   world.entities.find(entity => entity.id === 'player')!.locationId = 'tower';
   const moved = publicStoryDirection(world);
-  assert.ok(moved.leads.every(lead => !lead.entityIds.includes('mara')));
-  assert.ok(moved.leads.some(lead => lead.entityIds.includes('tower')));
+  assert.equal(moved.focusQuestId, 'mystery');
+  assert.ok(!Object.hasOwn(moved, 'leads'));
   assert.doesNotMatch(JSON.stringify(moved), /Hollow Choir|buried bell/);
 });
 
@@ -111,8 +123,9 @@ test('fresh testimony supports a lead while remaining a claim, not established t
   })));
   assert.equal(after.story?.quietTurns, 0);
   assert.equal(after.facts.length, before.facts.length);
-  assert.equal(playerView(after).story?.leads[0].id, 'ask_witness');
-  assert.ok(publicChanges(before, after).some(change => change === 'Lead available: Ask about the person at the tower.'));
+  assert.equal(after.quests[0].guidance?.leads[0].id, 'ask_witness');
+  assert.ok(!Object.hasOwn(playerView(after).story!, 'leads'));
+  assert.ok(publicChanges(before, after).every(change => !change.startsWith('Lead available:')));
 });
 
 test('progress rejects unknown, hidden, unrelated or empty evidence without applying any world changes', () => {
@@ -160,16 +173,17 @@ test('public guidance rejects hidden entity, fact and claim references and ungro
   assert.throws(() => applyStoryProposal(before, proposal([], plan({ questUpdates: [update(before, { leads: [{ id: 'empty', text: 'Nothing concrete.', action: 'Go somewhere.', entityIds: [], evidenceFactIds: [], evidenceClaimIds: [] }] })] }))), /STORY_UNGROUNDED_LEAD/);
 });
 
-test('player projection hides private parent IDs and evidence IDs and rechecks lead visibility', () => {
+test('player projection hides private parent IDs, evidence IDs and all legacy lead commands', () => {
   const before = seedWorld(); before.quests.push(quest('secret_world_arc', 'world', null, [])); before.quests[0].guidance!.parentId = 'secret_world_arc';
   before.quests[0].guidance!.entityIds.push('order');
   const view = playerView(before);
   assert.equal(view.quests[0].parentId, null);
   assert.doesNotMatch(JSON.stringify(view), /secret_world_arc|evidenceFactIds|evidenceClaimIds|lastProgressRevision|Hollow Choir/);
   before.facts.find(fact => fact.id === 'arrival')!.knownBy = ['mara'];
-  assert.ok(playerView(before).story?.leads.every(lead => lead.id !== 'ask_woman'));
+  assert.ok(!Object.hasOwn(playerView(before).story!, 'leads'));
   before.entities.find(entity => entity.id === 'tower')!.knownBy = ['mara'];
-  assert.ok(playerView(before).quests[0].leads?.every(lead => lead.id !== 'inspect_tower'));
+  assert.ok(!Object.hasOwn(playerView(before).quests[0], 'leads'));
+  assert.ok(before.quests[0].guidance!.leads.some(lead => lead.id === 'inspect_tower'));
 });
 
 test('public story focus cannot point to a hidden or finished quest', () => {
@@ -180,7 +194,7 @@ test('public story focus cannot point to a hidden or finished quest', () => {
   assert.equal(effectiveStoryFocus(before), 'mystery');
   before.quests[0].status = 'completed';
   assert.equal(effectiveStoryFocus(before), null);
-  assert.deepEqual(publicStoryDirection(before).leads, []);
+  assert.ok(!Object.hasOwn(publicStoryDirection(before), 'leads'));
 });
 
 test('quest resolution needs fresh evidence, and terminal quests cannot be reconfigured later', () => {
@@ -188,7 +202,7 @@ test('quest resolution needs fresh evidence, and terminal quests cannot be recon
   assert.throws(() => applyStoryProposal(before, proposal([{ op: 'update_quest', id: 'mystery', status: 'completed' }], plan({ focusQuestId: null }))), /STORY_RESOLUTION_WITHOUT_EVIDENCE/);
   assert.deepEqual(before, saved);
   const after = applyStoryProposal(before, proposal([clue(), { op: 'update_quest', id: 'mystery', status: 'completed' }], plan({ focusQuestId: null, progress: [{ questId: 'mystery', factIds: ['clue'], claimIds: [] }], questUpdates: [update(before, { leads: [] })] })));
-  assert.deepEqual(playerView(after).story?.leads, []);
+  assert.ok(!Object.hasOwn(playerView(after).story!, 'leads'));
   assert.throws(() => applyStoryProposal(after, proposal([], plan({ focusQuestId: null, questUpdates: [update(before, { leads: [] })] }))), /STORY_RESOLVED_QUEST/);
 });
 

@@ -1,6 +1,6 @@
 import type { World, PlayerView } from './types';
 import { itemState } from './inventory';
-import { publicQuestLeads, publicStoryDirection } from './story';
+import { publicStoryDirection } from './story';
 
 export function playerView(world: World): PlayerView {
   const p = world.playerId;
@@ -21,7 +21,7 @@ export function playerView(world: World): PlayerView {
       ...(quest.guidance ? {
         scope: quest.guidance.scope,
         parentId: world.quests.some(parent => parent.id === quest.guidance?.parentId && knows(parent)) ? quest.guidance.parentId : null,
-        objective: quest.guidance.objective, stakes: quest.guidance.stakes, leads: publicQuestLeads(world, quest),
+        objective: quest.guidance.objective, stakes: quest.guidance.stakes,
       } : {}),
     })),
     story: publicStoryDirection(world),
@@ -35,9 +35,6 @@ export function publicChanges(before: World, after: World): string[] {
   for (const q of b.quests) {
     const old = a.quests.find(x => x.id === q.id);
     if (!old || old.status !== q.status) changes.push(`Quest ${q.status}: ${q.title}.`);
-    for (const lead of q.leads ?? []) {
-      if (!old?.leads?.some(previous => previous.id === lead.id && previous.text === lead.text && previous.action === lead.action)) changes.push(`Lead available: ${lead.text}`);
-    }
   }
   for (const e of b.entities) if (!a.entities.some(x => x.id === e.id)) changes.push(`Discovered: ${e.name}.`);
   for (const r of b.rules) if (!a.rules.some(x => x.id === r.id)) changes.push(`World rule learned: ${r.text}`);

@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { demoTurn, newSample, OPENING, suggestions, type SampleChoice } from '@/engine/demo';
 import { playerView } from '@/engine/view';
-import { type PlayerView, type PublicTurn, type PublicLead } from '@/engine/types';
+import { type PlayerView, type PublicTurn } from '@/engine/types';
 import { Inventory, type CarriedItem, type InventoryAction } from '@/components/inventory';
-import { focusedQuest, QuestJournal, StoryGuidance } from '@/components/story-guidance';
+import { focusedQuest, QuestJournal } from '@/components/story-guidance';
 import { StoryLog } from '@/components/story-log';
 
 type Tab = 'Story' | 'Character' | 'Journal' | 'World';
@@ -295,11 +295,6 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
     setSelectedItemId(item.id); setNotice(''); setTab('Story');
     setInput(action==='consume'?`I consume one ${item.name}.`:action==='drop'?`I drop ${item.quantity>1?`all ${item.quantity} of my`:'my'} ${item.name}.`:`I use my ${item.name} to `);
   }
-  function prepareLead(lead:PublicLead) {
-    if (!campaign || busy || archived) return;
-    setInput(lead.action); setSelectedItemId(null); setNotice('');
-    actionInput.current?.focus();
-  }
   function openSample() {
     const fresh=newSample(); setSample(fresh); setCampaign(null); setArchived(false); setView(playerView(fresh.world)); setTurns([]);
     setTab('Story'); setNotice(''); setInput(''); setSelectedItemId(null); setLobby(false); setResetConfirm(false); pending.current=null;
@@ -350,8 +345,6 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
           <div className="composer-note"><span>AI adventure · Your own words, your next move.</span><span>{input.length}/2000</span></div></>}
           {phase&&<p className="pending" role="status"><span className="pulse"/>{phase}</p>}
           {notice&&<p className="notice" role="status">{notice}</p>}
-          <StoryGuidance view={view} readOnly={archived||mode==='sample'} busy={busy} onChoose={prepareLead}/>
-          {mode==='live'&&!archived&&turns.length===0&&!view.story&&<div className="suggestions">{suggestions.map(choice=><button disabled={busy} key={choice} onClick={()=>{setInput(choice);setSelectedItemId(null);actionInput.current?.focus();}}>{choice}<span>↗</span></button>)}</div>}
         </div>
         <StoryLog turns={turns} opening={OPENING} location={view.character.location} busy={busy} onRetry={campaign?turnId=>void retryNarration(turnId,campaign):undefined}/>
       </> : <div className="detail-body">

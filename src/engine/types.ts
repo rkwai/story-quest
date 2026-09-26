@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ENGINE_VERSION = '1.2.0';
+export const ENGINE_VERSION = '1.3.0';
 const id = z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/);
 const text = z.string().min(1).max(1200);
 export const itemStateSchema = z.object({ quantity: z.number().int().min(0).max(99), consumable: z.boolean(), usable: z.boolean() });
@@ -55,14 +55,21 @@ const inventoryWireOperationSchema = z.discriminatedUnion('op', [
 export const inventoryWireProposalSchema = inventoryProposalSchema.extend({ operations: z.array(inventoryWireOperationSchema).max(20) });
 export const storyProposalSchema = inventoryProposalSchema.extend({ storyPlan: storyPlanSchema });
 export const storyWireProposalSchema = inventoryWireProposalSchema.extend({ storyPlan: storyPlanSchema });
+// Engine 1.3 keeps direction inside the fiction. Historical 1.2 schemas remain
+// unchanged for replay; current proposals cannot generate preset player inputs.
+export const narrativeQuestUpdateSchema = questUpdateSchema.omit({ leads: true }).strict();
+export const narrativePlanSchema = storyPlanSchema.extend({ questUpdates: z.array(narrativeQuestUpdateSchema).max(3) }).strict();
+export const narrativeProposalSchema = inventoryProposalSchema.extend({ storyPlan: narrativePlanSchema }).strict();
+export const narrativeWireProposalSchema = inventoryWireProposalSchema.extend({ storyPlan: narrativePlanSchema }).strict();
+export type NarrativePlan = z.infer<typeof narrativePlanSchema>;
+export type NarrativeProposal = z.infer<typeof narrativeProposalSchema>;
 export type QuestScope = z.infer<typeof questScopeSchema>;
 export type QuestLead = z.infer<typeof questLeadSchema>;
 export type QuestGuidance = z.infer<typeof questGuidanceSchema>;
 export type Quest = z.infer<typeof storedQuestSchema>;
 export type StoryPlan = z.infer<typeof storyPlanSchema>;
 export type StoryProposal = z.infer<typeof storyProposalSchema>;
-export interface PublicLead { id: string; questId: string; text: string; action: string; entityIds: string[] }
-export interface PublicStoryDirection { focusQuestId: string | null; quietTurns: number; leads: PublicLead[] }
+export interface PublicStoryDirection { focusQuestId: string | null; quietTurns: number }
 export type ItemAction = z.infer<typeof itemActionSchema>;
 export type InventoryProposal = z.infer<typeof inventoryProposalSchema>;
 export type ItemState = z.infer<typeof itemStateSchema>;
@@ -83,7 +90,7 @@ export interface PlayerView {
   entities: { id: string; name: string; kind: Entity['kind'] }[];
   facts: { id: string; text: string; at: number; subjects: string[] }[];
   claims: { id: string; text: string; speaker: string }[];
-  quests: { id: string; title: string; description: string; status: string; scope?: QuestScope; parentId?: string | null; objective?: string; stakes?: string; leads?: PublicLead[] }[];
+  quests: { id: string; title: string; description: string; status: string; scope?: QuestScope; parentId?: string | null; objective?: string; stakes?: string }[];
   story?: PublicStoryDirection;
   rules: { id: string; text: string }[];
 }

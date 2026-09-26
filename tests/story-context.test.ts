@@ -35,7 +35,7 @@ test('quest context is bounded as active branches grow; exact interest beats sav
   assert.ok(context.manifest.chars <= 24000);
   assert.deepEqual(context.state.storyDirector.selectedQuestIds, context.manifest.questIds);
   assert.equal(context.state.storyDirector.quietTurns, 2);
-  assert.equal(context.state.storyDirector.needsDirection, true, 'a quest without a lead needs useful direction');
+  assert.equal(context.state.storyDirector.needsDirection, false, 'an existing objective does not need generated action suggestions');
   assert.doesNotMatch(JSON.stringify(context.state), /errand_249/);
   assert.deepEqual(world, original);
   const reversed = structuredClone(world); reversed.quests.reverse();
@@ -95,7 +95,7 @@ test('a relevant secret branch and its evidence stay DM-only and cannot become t
   assert.equal(context.manifest.focusQuestId, known.id);
   assert.ok(context.manifest.questIds.includes(hidden.id));
   assert.ok(context.manifest.factIds.includes('cause'));
-  assert.match(JSON.stringify(context.state), /PRIVATE_CULPRIT_DIRECTION/);
+  assert.doesNotMatch(JSON.stringify(context.state), /PRIVATE_CULPRIT_DIRECTION|PRIVATE_CULPRIT_ACTION/);
   assert.doesNotMatch(JSON.stringify(playerView(world)), /PRIVATE_CULPRIT|buried_pact|Hollow Choir|buried bell/);
 });
 
@@ -189,4 +189,70 @@ test('referencing a resolved quest ID alone retrieves its history with no active
   assert.equal(context.manifest.focusQuestId, null);
   assert.deepEqual(context.manifest.questIds, [resolved.id]);
   assert.equal(context.state.quests[0].status, 'completed');
+});
+
+test('legacy action suggestions are omitted from every selected quest while preserving goal and evidence context', () => {
+  const parent = quest('broad_question', 'arc'), focused = quest('current_problem', 'local', parent.id), optional = quest('nearby_question');
+  const world = worldWithQuests(parent, focused, optional);
+  world.story = { focusQuestId: focused.id, quietTurns: 0, lastProgressRevision: 0 };
+  world.claims.push({ id: 'remembered_testimony', speakerId: 'mara', text: 'I waited here through the night.', knownBy: ['player'] });
+  for (const quest of world.quests) quest.guidance!.leads = [{ id: `lead_${quest.id}`, text: `LEGACY_TEXT_${quest.id}`, action: `LEGACY_ACTION_${quest.id}`, entityIds: ['mara'], evidenceFactIds: ['arrival'], evidenceClaimIds: ['remembered_testimony'] }];
+  const original = structuredClone(world);
+  const context = buildContext(world, 'Consider the current problem.');
+  assert.equal(context.manifest.focusQuestId, focused.id);
+  assert.equal(context.state.quests.length, 3);
+  assert.doesNotMatch(JSON.stringify(context.state), /LEGACY_TEXT_|LEGACY_ACTION_|"leads"|"action"/);
+  for (const quest of context.state.quests) {
+    assert.ok(quest.guidance?.objective);
+    assert.ok(quest.guidance?.stakes);
+    assert.ok(!Object.hasOwn(quest.guidance!, 'leads'));
+  }
+  assert.ok(context.manifest.factIds.includes('arrival'));
+  assert.ok(context.manifest.claimIds.includes('remembered_testimony'));
+  assert.match(context.state.storyDirector.instruction, /clues, NPC dialogue and consequences committed by world operations/);
+  assert.match(context.state.storyDirector.instruction, /Do not generate menus or preset player inputs/);
+  assert.deepEqual(world, original, 'legacy saved metadata remains unchanged');
+});
+
+test('legacy action text no longer ranks or selects a quest', () => {
+  const focused = quest('scene_question'), old = quest('unrelated_errand');
+  old.guidance!.entityIds = [];
+  old.guidance!.leads = [{ id: 'retired', text: 'Old suggestion.', action: 'Turn around exactly three times.', entityIds: ['mara'], evidenceFactIds: [], evidenceClaimIds: [] }];
+  const world = worldWithQuests(focused, old);
+  world.story = { focusQuestId: focused.id, quietTurns: 0, lastProgressRevision: 0 };
+  const context = buildContext(world, 'Turn around exactly three times.');
+  assert.equal(context.manifest.focusQuestId, focused.id);
+  assert.deepEqual(context.manifest.questIds, [focused.id]);
+  assert.ok(context.manifest.questSelection.every(quest => !quest.reasons.includes('explicit_lead')));
+});
+
+test('pacing requests in-world direction for quiet turns or a missing objective, not absent preset actions', () => {
+  const focused = quest('current_goal'), world = worldWithQuests(focused);
+  focused.guidance!.leads = [];
+  assert.equal(buildContext(world, 'Wait.').state.storyDirector.needsDirection, false);
+  world.story = { focusQuestId: focused.id, quietTurns: 3, lastProgressRevision: 0 };
+  assert.equal(buildContext(world, 'Wait.').state.storyDirector.needsDirection, true);
+  world.story.quietTurns = 0;
+  focused.guidance!.objective = '   ';
+  assert.equal(buildContext(world, 'Wait.').state.storyDirector.needsDirection, true);
+  delete focused.guidance;
+  assert.equal(buildContext(world, 'Wait.').state.storyDirector.needsDirection, true);
+});
+
+test('legacy lead receipts are filtered from live conversation without rewriting recorded turns or narration', () => {
+  const world = worldWithQuests(quest('current_question')); world.revision = 1;
+  // This is the exact legacy receipt format covered by the 1.2 story fixture.
+  const recorded = [{
+    id: 'legacy-turn', revision: 1, input: 'I ask about the person at the tower.',
+    changes: ['Lead available: Ask about the person at the tower.', 'The woman claims: “Someone waited at the tower.”', '1 minute passes.'],
+    narration: 'She tells you that someone waited at the tower. You could ask what she remembers.'
+  }];
+  const original = structuredClone(recorded);
+  const context = buildContext(world, 'What did they look like?', 24000, recorded);
+  assert.deepEqual(context.state.recentTurns[0].changes, ['The woman claims: “Someone waited at the tower.”', '1 minute passes.']);
+  assert.equal(context.state.recentTurns[0].input, recorded[0].input);
+  assert.equal(context.state.recentTurns[0].narration, recorded[0].narration);
+  assert.doesNotMatch(JSON.stringify(context.state.recentTurns), /Lead available:/);
+  assert.deepEqual(recorded, original);
+  assert.equal(context.manifest.conversationChars, JSON.stringify(context.state.recentTurns).length);
 });

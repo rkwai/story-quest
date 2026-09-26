@@ -20,11 +20,11 @@ The home screen is a shared adventure lobby. Start a new adventure with one clic
 
 Adventures provide phone-friendly Story, Character, Journal and World views, free-text roleplay, a typed world reducer, scoped context, persistent saves and a two-stage live DM integration. A separate scripted preview uses only three preset buttons and makes no model calls. Live play needs the configuration below. See [implementation status](docs/implementation.md) for verified completion and remaining work; do not infer production readiness from this README.
 
-The Story screen puts your action input first, suggested prompts beneath it, then the latest interaction. Earlier moments are available in a separate scrollable history, newest first.
+The Story screen puts your action input first, followed by the newest scene. Earlier moments are available in a separate scrollable history, newest first, without visible chronology headings. The DM offers direction within the story; live play has no generated preset prompts.
 
 The Character view shows carried items, quantities and availability, with an Inventory shortcut beside the story composer. Selecting an item prepares an editable action; sending it remains explicit. Live proposals declare item use, acquisition, transfers, consumption, damage and repair, which the engine checks before any consequence commits. A missing item blocks the attempt without advancing the world. Existing saves and recorded history remain intact. See [inventory behavior and current limits](docs/inventory.md), including the remaining dependency on the DM recognizing equipment requirements in free text.
 
-Story direction connects optional world, major, local and immediate quests through objectives, stakes and grounded leads. The Story view offers editable next moves throughout the adventure; the Journal explains their wider purpose. A bounded director context helps the DM develop relevant threads and notice stretches without supported progress while preserving the player's exact intent. Progress requires fresh evidence; plans never establish future facts. Existing adventures gain safe scene-based suggestions without a reset. See [research, mechanics and limits](docs/story-direction.md).
+Story direction connects optional world, major, local and immediate quests through objectives, stakes and fresh progress evidence. The Journal explains those goals; the DM develops opportunities through dialogue, discoveries and consequences. A bounded director context helps it notice stretches without supported progress while preserving the player's exact intent. Plans never establish future facts. Existing adventures continue without a reset. See [research, mechanics and limits](docs/story-direction.md).
 
 ## Run
 
