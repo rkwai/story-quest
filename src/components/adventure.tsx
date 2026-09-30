@@ -92,7 +92,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   const [busy,setBusy] = useState(false);
   const [phase,setPhase] = useState('');
   const [notice,setNotice] = useState('');
-  const [responseToReveal,setResponseToReveal] = useState<{campaignId:string;turnId:string}|null>(null);
+  const [completedSubmission,setCompletedSubmission] = useState<{campaignId:string;turnId:string}|null>(null);
   const [ready,setReady] = useState(false);
   const [lobby,setLobby] = useState(true);
   const [campaign,setCampaign] = useState<string|null>(null);
@@ -135,13 +135,13 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
   useEffect(() => { if (deleteConfirm) cancelDelete.current?.focus(); }, [deleteConfirm]);
   useEffect(() => { if (!lobby && tab==='Story' && selectedItemId) actionInput.current?.focus(); }, [lobby,tab,selectedItemId]);
   useEffect(() => {
-    if (!responseToReveal) return;
-    setResponseToReveal(null);
+    if (!completedSubmission || busy) return;
+    setCompletedSubmission(null);
     const response=latestResponse.current;
-    if (lobby || tab!=='Story' || campaign!==responseToReveal.campaignId || response?.dataset.turnId!==responseToReveal.turnId) return;
-    response.focus({preventScroll:true});
-    response.scrollIntoView({block:'start'});
-  }, [responseToReveal,lobby,tab,campaign]);
+    if (lobby || tab!=='Story' || archived || campaign!==completedSubmission.campaignId || response?.dataset.turnId!==completedSubmission.turnId) return;
+    actionInput.current?.focus({preventScroll:true});
+    composer.current?.scrollIntoView({block:'start'});
+  }, [completedSubmission,busy,lobby,tab,campaign,archived]);
 
   async function refreshCampaigns() {
     const request = ++listRequest.current;
@@ -290,7 +290,7 @@ export function Adventure({ liveAvailable }: { liveAvailable: boolean }) {
       if (data.replayed) await loadCampaign(id);
       else setTurns(old=>[...old.filter(turn=>turn.id!==data.turn.id),data.turn]);
       if (!data.turn.narration) await finishNarration(data.turn.id,id);
-      setResponseToReveal({campaignId:id,turnId:data.turn.id});
+      setCompletedSubmission({campaignId:id,turnId:data.turn.id});
     } catch (error) {
       const code=(error as Error).message;
       if (missingCampaign(code)) {

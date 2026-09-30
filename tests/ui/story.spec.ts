@@ -40,9 +40,13 @@ test('live play uses freeform input and ignores legacy generated suggestions bef
   await page.route('**/api/turns',async route=>{
     const request=route.request().postDataJSON();requests.push(request);
     state.view={...state.view,revision:1};
-    const turn:PublicTurn={id:request.turnId,input:request.input,interpretation:'You ask why she is here.',changes:[],narration:'She considers your question.',revision:1};
+    const turn:PublicTurn={id:request.turnId,input:request.input,interpretation:'You ask why she is here.',changes:[],narration:null,revision:1};
     state.turns.push(turn);
     await route.fulfill({json:{view:state.view,turn}});
+  });
+  await page.route('**/api/narration',async route=>{
+    await expect(page.getByRole('textbox',{name:'Your action'})).toBeDisabled();
+    await route.fulfill({json:{narration:'She considers your question.'}});
   });
   await expectNoGeneratedSuggestions(page);
   await expect(page.locator('.composer .suggestions')).toHaveCount(0);
@@ -52,11 +56,13 @@ test('live play uses freeform input and ignores legacy generated suggestions bef
   await page.getByRole('textbox',{name:'Your action'}).fill(action);
   await page.getByRole('button',{name:'Send action'}).click();
   await expect(page.getByText('She considers your question.')).toBeVisible();
-  const response=page.locator('.latest-interaction .turn-response');
-  await expect(response).toBeFocused();
-  const positions=await page.evaluate(()=>({response:document.querySelector('.latest-interaction .turn-response')!.getBoundingClientRect().top,input:document.querySelector('.latest-interaction .player-action')!.getBoundingClientRect().top}));
-  expect(positions.response).toBeGreaterThanOrEqual(0);
-  expect(positions.response).toBeLessThan(100);
+  const prompt=page.getByRole('textbox',{name:'Your action'});
+  await expect(prompt).toBeEnabled();
+  await expect(prompt).toBeFocused();
+  await expect(prompt).toHaveValue('');
+  const positions=await page.evaluate(()=>({composer:document.querySelector('.composer')!.getBoundingClientRect().top,response:document.querySelector('.latest-interaction .turn-response')!.getBoundingClientRect().top,input:document.querySelector('.latest-interaction .player-action')!.getBoundingClientRect().top}));
+  expect(positions.composer).toBeGreaterThanOrEqual(0);
+  expect(positions.composer).toBeLessThan(100);
   expect(positions.input).toBeGreaterThan(positions.response);
   expect(requests).toHaveLength(1);
   expect(requests[0].input).toBe(action);
@@ -96,6 +102,7 @@ test('story follows the input with newest passages first and no visible chronolo
   await history.getByRole('button',{name:'Continue the narration'}).click();
   await expect(history.getByRole('region',{name:'Interaction 1',exact:true})).toContainText('An earlier passage restored.');
   expect(retries).toEqual([{campaignId,turnId:'turn-1'}]);
+  await expect(page.getByRole('textbox',{name:'Your action'})).not.toBeFocused();
   await expect(page.locator('.latest-interaction')).toContainText('The latest passage remains fully readable.');
   await page.locator('.composer').scrollIntoViewIfNeeded();
   await page.screenshot({path:test.info().outputPath('phone-freeform-story.png'),fullPage:true});

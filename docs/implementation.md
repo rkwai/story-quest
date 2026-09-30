@@ -1,6 +1,10 @@
 # Implementation plan and status
 
-Updated: 2026-09-26. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-09-30. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+
+## Return to the prompt — September 30, 2026
+
+After a submitted turn finishes, focus returns to the enabled action input and the composer scrolls to the top. This supersedes the previous response-focus behavior; narration still appears above the submitted action. Focus waits for processing to finish and remains scoped to the same active adventure and Story tab. Older narration retries do not redirect focus. TypeScript, all **141 regression tests**, the production build and all **15 phone browser tests** pass. The updated browser flow verifies that the input remains disabled through narration, then becomes empty, enabled and focused with the composer near the top of the viewport; older retries leave it unfocused. All provider responses are mocked and no paid playtest was run. Release through GitHub master and verify the exact production commit.
 
 ## Mac shortcut and visible processing — September 26, 2026
 
