@@ -4,6 +4,7 @@ import { propose, PROMPT_VERSION } from '@/server/dm';
 import { ModelCallError } from '@/server/openrouter';
 import { reviewProposal } from '@/server/typesafe';
 import { recentConversation } from '@/server/conversation';
+import { normalizeProposal, type ProposalNormalization } from '@/server/proposal-normalization';
 import { buildContext } from '@/engine/context';
 import { InventoryError, inventoryActionChanges, itemState } from '@/engine/inventory';
 import { applyNarrativeProposal, StoryError } from '@/engine/story';
@@ -15,6 +16,7 @@ const inputSchema = z.object({ campaignId: z.uuid(), turnId: z.uuid(), revision:
 export async function POST(request: Request) {
   let acquired: { campaign: string; owner: string; turn: string } | undefined;
   let candidate: NarrativeProposal | undefined;
+  let normalization: ProposalNormalization | undefined;
   const start = performance.now();
   try {
     requireSameOrigin(request);
@@ -36,35 +38,38 @@ export async function POST(request: Request) {
     const context = buildContext(before, body.input, 24000, recentTurns, body.itemId);
     await trace(body.campaignId, body.turnId, 'context', performance.now()-start, { ...context.manifest, revision: before.revision, engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION });
     const answer = await propose(context.state, body.input);
-    await trace(body.campaignId, body.turnId, 'proposal', answer.metrics.durationMs, answer.metrics);
     candidate = answer.data;
-    if (body.itemId && answer.data.kind !== 'clarification' && !answer.data.itemActions.some(action => action.itemId === body.itemId)) throw new InventoryError('INVENTORY_ACTION_REQUIRED');
-    const after = applyNarrativeProposal(before, answer.data);
-    const review = await reviewProposal(context.state, body.input, answer.data);
+    const normalized = normalizeProposal(before, candidate);
+    const proposal = normalized.proposal;
+    normalization = normalized.normalization;
+    await trace(body.campaignId, body.turnId, 'proposal', answer.metrics.durationMs, { ...answer.metrics, normalization });
+    if (body.itemId && proposal.kind !== 'clarification' && !proposal.itemActions.some(action => action.itemId === body.itemId)) throw new InventoryError('INVENTORY_ACTION_REQUIRED');
+    const after = applyNarrativeProposal(before, proposal);
+    const review = await reviewProposal(context.state, body.input, proposal);
     await trace(body.campaignId, body.turnId, 'typesafe_review', review.durationMs, review);
-    if (answer.data.kind === 'clarification') {
+    if (proposal.kind === 'clarification') {
       const { error: releaseError } = await db.rpc('release_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId }); checkDb(releaseError);
-      await trace(body.campaignId, body.turnId, 'clarification', performance.now()-start, { proposal: answer.data });
+      await trace(body.campaignId, body.turnId, 'clarification', performance.now()-start, { proposal });
       acquired = undefined;
       // The DM saw private facts. Its freeform question belongs in private traces only.
       return Response.json({ clarification: 'Could you be more specific about what you want to do or ask, and who or what it involves?' });
     }
-    const turn: PublicTurn = { id: body.turnId, input: body.input, interpretation: `Your attempt: ${body.input}`, changes: [...inventoryActionChanges(before, answer.data.itemActions), ...publicChanges(before, after)], narration: null, revision: after.revision };
-    const { data: committed, error: commitError } = await db.rpc('commit_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId, p_revision: before.revision, p_state: after, p_proposal: answer.data, p_result: turn, p_view: playerView(after), p_engine: ENGINE_VERSION });
+    const turn: PublicTurn = { id: body.turnId, input: body.input, interpretation: `Your attempt: ${body.input}`, changes: [...inventoryActionChanges(before, proposal.itemActions), ...publicChanges(before, after)], narration: null, revision: after.revision };
+    const { data: committed, error: commitError } = await db.rpc('commit_turn', { p_campaign: body.campaignId, p_owner: owner, p_turn: body.turnId, p_revision: before.revision, p_state: after, p_proposal: proposal, p_result: turn, p_view: playerView(after), p_engine: ENGINE_VERSION });
     checkDb(commitError);
     acquired = undefined;
     await trace(body.campaignId, body.turnId, 'committed', performance.now()-start, {
-      revision: after.revision, operationCount: answer.data.operations.length,
-      inventory: { status: 'validated', itemActions: answer.data.itemActions },
+      revision: after.revision, operationCount: proposal.operations.length,
+      inventory: { status: 'validated', itemActions: proposal.itemActions },
       story: { status: 'validated', focusQuestId: after.story?.focusQuestId ?? null,
         quietTurnsBefore: before.story?.quietTurns ?? 0, quietTurns: after.story?.quietTurns ?? 0,
-        progress: answer.data.storyPlan.progress, updatedQuestIds: answer.data.storyPlan.questUpdates.map(update => update.questId),
+        progress: proposal.storyPlan.progress, updatedQuestIds: proposal.storyPlan.questUpdates.map(update => update.questId),
         directionMode: 'narrative' }
     });
     return Response.json({ turn: committed, view: playerView(after) });
   } catch (e) {
     if (acquired) {
-      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}), ...(e instanceof InventoryError ? { inventory: { status: 'blocked', code: e.code } } : {}), ...(e instanceof StoryError ? { story: { status: 'blocked', code: e.code } } : {}) });
+      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, ...(normalization ? { normalization } : {}), ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}), ...(e instanceof InventoryError ? { inventory: { status: 'blocked', code: e.code } } : {}), ...(e instanceof StoryError ? { story: { status: 'blocked', code: e.code } } : {}) });
       await Promise.resolve(database().rpc('release_turn', { p_campaign: acquired.campaign, p_owner: acquired.owner, p_turn: acquired.turn })).catch(() => undefined);
     }
     return failure(e);

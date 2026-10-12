@@ -136,7 +136,7 @@ export function buildContext(world: World, input: string, maxChars = 24000, rece
   const inventory = world.entities.filter(e => e.kind === 'item' && e.ownerId === world.playerId)
     .map(e => ({ id: e.id, name: e.name, ...itemState(e) }));
   let base = {
-    title: world.title, premise: world.premise, minute: world.minute, playerId: world.playerId,
+    title: world.title, premise: world.premise, revision: world.revision, minute: world.minute, playerId: world.playerId,
     entities: linked, inventory: { complete: true, items: inventory, selectedItemId: selectedItemId ?? null },
     rules: world.rules, facts, claims: world.claims.filter(c => ids.has(c.speakerId)).slice(-10), quests: [] as ContextQuest[], scheduled,
     storyDirector: {

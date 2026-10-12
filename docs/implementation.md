@@ -1,6 +1,16 @@
 # Implementation plan and status
 
-Updated: 2026-09-30. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-10-12. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+
+## Repeated quest/rule declarations — October 12, 2026
+
+Rick reported `DUPLICATE_ID` while playing and after starting another adventure. Production traces show the DM re-emitting `add_quest` for already-stored quests, including an unchanged seed quest. One response also repeated an existing world rule. These are collisions inside individual campaign snapshots, not interference between adventures.
+
+The live route now normalizes exact already-stored active quest/rule reassertions before validation and records omitted operation indices/types/IDs privately. All authored fields and knowledge membership must match; audience ordering alone is immaterial. Existing quest guidance survives. Conflicting content or observers, quests involved in status updates, new repeated IDs, other operation types and invalid clarification operations remain strict. The accepted normalized proposal is the one reviewed, committed and replayed. Failed traces retain the raw candidate plus normalization metadata. No history or seed is rewritten, no migration/reset is required, and engine 1.3.0 replay is unchanged.
+
+Prompt `dm-1.5.1` explicitly asks for a delta instead of a state copy, discourages recreating existing goals/rules under new IDs, distinguishes observations from lore, and requires actual newly recorded evidence for progress. The bounded proposal context now includes its revision for new-record ID suffixes. This adds no model request, automatic paid retry or trace-write stage.
+
+Verification: TypeScript, all **154 regression tests** and the production build pass. New tests cover safe repeats, conflicting content/knowledge/status, cross-campaign ID scope, new duplicate rejection, inventory atomicity, strict clarification/evidence checks, normalized replay and same-turn request replay. An independent review found no remaining blocker. Four recorded rejected proposals were evaluated locally against their saved snapshots: two now apply and replay identically; two still fail with `STORY_UNKNOWN_FACT` because their progress cites evidence never established. That evidence is not invented or silently discarded. All provider tests are mocked; no paid model calls or production gameplay mutations were made. Release through GitHub master and verify the production alias and existing adventures before reporting completion.
 
 ## Return to the prompt — September 30, 2026
 

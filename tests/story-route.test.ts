@@ -2,6 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { POST as turnPost } from '../src/app/api/turns/route';
 import { seedWorld } from '../src/engine/seed';
+import { replayVersioned } from '../src/engine/inventory';
 import type { PublicTurn, NarrativeProposal, World } from '../src/engine/types';
 
 const campaignId = '11111111-1111-4111-8111-111111111111';
@@ -60,7 +61,9 @@ function setup(t: TestContext, candidate: unknown, state = legacyWorld()) {
       });
     }
     if (url.pathname === '/rest/v1/campaigns') return Response.json({ owner_id: owner });
-    if (url.pathname === '/rest/v1/rpc/reserve_turn') return Response.json({ replayed: false, state });
+    if (url.pathname === '/rest/v1/rpc/reserve_turn') return Response.json(commits.length
+      ? { replayed: true, turn: commits[0].p_result }
+      : { replayed: false, state });
     if (url.pathname === '/rest/v1/turns') return Response.json([]);
     if (url.pathname === '/rest/v1/turn_traces') {
       traces.push(JSON.parse(String(options?.body)));
@@ -208,6 +211,7 @@ test('stalled pacing reaches the existing proposal call and metadata changes can
   assert.equal(fixture.paths.filter(path => path === '/api/alpha/decisions').length, 1);
   const messages = fixture.modelRequests[0].messages as { content: string }[];
   const state = JSON.parse(messages[1].content).state;
+  assert.equal(state.revision, 4, 'new record IDs can use the reserved campaign revision');
   assert.equal(state.storyDirector.focusQuestId, 'mystery');
   assert.equal(state.storyDirector.quietTurns, 3);
   assert.equal(state.storyDirector.needsDirection, true);
@@ -237,3 +241,114 @@ test('reusing an already known fact as quest progress returns a safe error and p
   assert.deepEqual(fixture.traces.find(trace => trace.stage === 'failed')!.details.story, { status: 'blocked', code: 'STORY_STALE_PROGRESS' });
   assert.deepEqual(world, original);
 });
+
+function worldWithToken() {
+  const world = seedWorld();
+  world.quests[0].knownBy = ['player', 'mara'];
+  world.entities.push({ id: 'brass_token', kind: 'item', name: 'Brass token',
+    description: 'A brass token resting beside the arch.', locationId: 'ashford', ownerId: null,
+    condition: 'Tarnished', knownBy: ['player', 'mara'] });
+  return world;
+}
+function repeatedQuest(world: World): Extract<NarrativeProposal['operations'][number], { op: 'add_quest' }> {
+  const { id, title, description, status, knownBy } = world.quests[0];
+  return { op: 'add_quest', quest: { id, title, description, status, knownBy: [...knownBy].reverse() } };
+}
+function takeToken(world: World): NarrativeProposal {
+  return { ...proposal, interpretation: 'You pick up the brass token.',
+    itemActions: [{ action: 'take', itemId: 'brass_token', quantity: 1, recipientId: null }],
+    operations: [repeatedQuest(world)] };
+}
+
+test('an unchanged quest and rule repeated beside a valid item action are normalized, committed once and replayable', async t => {
+  const world = worldWithToken(), original = structuredClone(world);
+  const candidate = takeToken(world);
+  candidate.operations.push({ op: 'add_rule', rule: structuredClone(world.rules[0]) },
+    { op: 'establish_fact', fact: { id: 'token_inscription', key: 'brass_token.inscription',
+      text: 'The token bears the outline of a bell tower.', subjects: ['brass_token', 'tower'],
+      at: world.minute + 1, knownBy: ['player'] } });
+  const fixture = setup(t, candidate, world);
+  const response = await turnPost(request('I pick up the brass token.'));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(fixture.commits.length, 1);
+  const committed = fixture.commits[0];
+  assert.equal(committed.p_engine, '1.3.0', 'the existing reducer remains authoritative for replay');
+  assert.deepEqual(committed.p_proposal, { ...candidate, operations: candidate.operations.slice(2) });
+  assert.equal(committed.p_state.entities.find(entity => entity.id === 'brass_token')!.ownerId, 'player');
+  assert.equal(committed.p_state.quests.length, original.quests.length);
+  assert.deepEqual(committed.p_state.quests[0], original.quests[0], 'normalization must retain stored quest guidance and audience');
+  assert.deepEqual(committed.p_state.rules, original.rules);
+  assert.deepEqual(replayVersioned(original, [{ engine_version: committed.p_engine, proposal: committed.p_proposal }]), committed.p_state);
+  assert.equal(result.turn.changes.filter((change: string) => change.startsWith('Picked up:')).length, 1);
+  assert.equal(result.turn.changes.some((change: string) => change.startsWith('Quest ') || change.startsWith('World rule learned:')), false);
+  assert.doesNotMatch(JSON.stringify(result), /proposal-normalization-1|normalization|omittedOperations|already_established/);
+  assert.deepEqual(fixture.traces.find(trace => trace.stage === 'proposal')!.details.normalization, {
+    version: 'proposal-normalization-1', omittedOperations: [
+      { index: 0, op: 'add_quest', id: 'mystery', reason: 'already_established' },
+      { index: 1, op: 'add_rule', id: 'memory', reason: 'already_established' },
+    ],
+  });
+  const retry = await turnPost(request('I pick up the brass token.'));
+  assert.equal(retry.status, 200);
+  assert.deepEqual(await retry.json(), { turn: result.turn, replayed: true });
+  assert.equal(fixture.modelRequests.length, 1, 'normalization and replay must not request another generation');
+  assert.equal(fixture.paths.filter(path => path === '/api/alpha/decisions').length, 1);
+  assert.equal(fixture.commits.length, 1);
+  assert.deepEqual(world, original);
+});
+
+for (const [field, value] of [
+  ['description', 'Replace the established goal with an unrelated task.'],
+  ['knownBy', ['player']],
+  ['status', 'completed'],
+] as const) {
+  test(`a repeated quest with changed ${field} still rejects atomically and preserves the raw candidate`, async t => {
+    const world = worldWithToken(), original = structuredClone(world);
+    const candidate = takeToken(world);
+    const operation = repeatedQuest(world);
+    Object.assign(operation.quest, { [field]: value });
+    candidate.operations = [operation];
+    const fixture = setup(t, candidate, world);
+    const response = await turnPost(request('I pick up the brass token.'));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'DUPLICATE_ID' });
+    assertUncommitted(fixture);
+    assert.deepEqual(fixture.traces.find(trace => trace.stage === 'failed')!.details.rejectedProposal, candidate);
+    assert.deepEqual(world, original, 'a rejected quest cannot transfer the item or advance the world');
+  });
+}
+
+test('normalization cannot turn a clarification with world operations into a valid clarification', async t => {
+  const world = worldWithToken(), original = structuredClone(world);
+  const candidate: NarrativeProposal = { ...proposal, kind: 'clarification', elapsedMinutes: 0,
+    clarification: 'Which object do you mean?', operations: [repeatedQuest(world)],
+    storyPlan: { focusQuestId: null, questUpdates: [], progress: [] } };
+  const fixture = setup(t, candidate, world);
+  const response = await turnPost(request('I take that.'));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'INVALID_CLARIFICATION' });
+  assertUncommitted(fixture);
+  assert.deepEqual(fixture.traces.find(trace => trace.stage === 'failed')!.details.rejectedProposal, candidate);
+  assert.deepEqual(world, original);
+});
+
+for (const [factId, error] of [['ruin', 'STORY_STALE_PROGRESS'], ['missing_token_clue', 'STORY_UNKNOWN_FACT']] as const) {
+  test(`an omitted repeated quest still rejects ${error} and preserves the original operation`, async t => {
+    const world = worldWithToken(), original = structuredClone(world);
+    const candidate = takeToken(world);
+    candidate.storyPlan = { ...proposal.storyPlan,
+      progress: [{ questId: 'mystery', factIds: [factId], claimIds: [] }] };
+    const fixture = setup(t, candidate, world);
+    const response = await turnPost(request('I pick up the brass token.'));
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error });
+    assertUncommitted(fixture);
+    const failure = fixture.traces.find(trace => trace.stage === 'failed')!;
+    assert.deepEqual(failure.details.rejectedProposal, candidate, 'diagnostics need the original model output, including omitted repeats');
+    assert.deepEqual(failure.details.normalization, { version: 'proposal-normalization-1', omittedOperations: [
+      { index: 0, op: 'add_quest', id: 'mystery', reason: 'already_established' },
+    ] });
+    assert.deepEqual(world, original, 'invalid progress must discard tentative inventory changes too');
+  });
+}

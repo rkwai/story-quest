@@ -19,6 +19,8 @@ No public operator endpoint in the first slice. Inspect traces with privileged S
 
 ## Useful operational queries
 
+For `DUPLICATE_ID`, first inspect the rejected proposal against that campaign's reserved state. IDs are scoped to the record collection inside the campaign; another adventure using the same seed IDs is not a collision. Live `proposal` traces include `normalization.version` and `omittedOperations` (original operation index, type, ID and reason). Version `proposal-normalization-1` drops only identical already-stored active quest/rule declarations; the same knowledge membership is required, with audience ordering immaterial. Quest status updates, conflicting declarations, repeated new records, entities, facts, claims, events and clarification operations are not normalized. Stored guidance is preserved. Failed traces retain the original candidate plus normalization metadata; committed turns store only the accepted normalized proposal. Replay remains strict and never normalizes historical records. Missing or stale quest-progress evidence still rejects the entire attempt, including any tentative item transfer. No extra model request or trace-write stage is added.
+
 ```sql
 select stage, count(*), percentile_cont(0.95) within group (order by duration_ms) as p95_ms
 from public.turn_traces where created_at > now() - interval '7 days' group by stage;
