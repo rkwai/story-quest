@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { POST as turnPost } from '../src/app/api/turns/route';
 import { seedWorld } from '../src/engine/seed';
 import { replayVersioned } from '../src/engine/inventory';
+import { proposalRequestFingerprint } from '../src/server/proposal-retry';
 import type { PublicTurn, NarrativeProposal, World } from '../src/engine/types';
 
 const campaignId = '11111111-1111-4111-8111-111111111111';
@@ -13,13 +14,13 @@ const proposal: NarrativeProposal = {
   elapsedMinutes: 1, operations: [], itemActions: [],
   storyPlan: { focusQuestId: 'mystery', questUpdates: [], progress: [] },
 };
-type Trace = { stage: string; details: Record<string, unknown> };
+type Trace = { campaign_id: string; turn_id: string; stage: string; details: Record<string, unknown> };
 type Commit = { p_state: World; p_proposal: NarrativeProposal; p_result: PublicTurn; p_engine: string };
 
-function request(input: string, revision = 0) {
+function request(input: string, revision = 0, options: { retry?: boolean; itemId?: string; campaignId?: string; turnId?: string } = {}) {
   return new Request('https://story.example/api/turns', {
     method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://story.example' },
-    body: JSON.stringify({ campaignId, turnId, revision, input }),
+    body: JSON.stringify({ campaignId, turnId, revision, input, ...options }),
   });
 }
 function legacyWorld() {
@@ -28,7 +29,8 @@ function legacyWorld() {
   for (const quest of world.quests) delete quest.guidance;
   return world;
 }
-function setup(t: TestContext, candidate: unknown, state = legacyWorld()) {
+function setup(t: TestContext, candidate: unknown, state = legacyWorld(), options: { traceReadFailure?: 'response' | 'throw' } = {}) {
+  const { traceReadFailure } = options;
   const values = {
     OPENROUTER_API_KEY: 'fixture-story-private-key', STORY_MODEL: 'story/model', PROPOSAL_MODEL: 'planner/model',
     PROPOSAL_REASONING_EFFORT: 'low', STORY_REASONING_EFFORT: 'none', TYPESAFE_MODE: 'shadow',
@@ -41,6 +43,7 @@ function setup(t: TestContext, candidate: unknown, state = legacyWorld()) {
   } });
   const paths: string[] = [], traces: Trace[] = [], commits: Commit[] = [];
   const modelRequests: Record<string, unknown>[] = [], unexpected: string[] = [];
+  const traceReads: URL[] = [];
   t.after(() => assert.deepEqual(unexpected, [], 'all network requests must be explicitly mocked'));
   t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, options?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -66,6 +69,19 @@ function setup(t: TestContext, candidate: unknown, state = legacyWorld()) {
       : { replayed: false, state });
     if (url.pathname === '/rest/v1/turns') return Response.json([]);
     if (url.pathname === '/rest/v1/turn_traces') {
+      if (options === undefined) throw new Error('Fixture request options were missing');
+      if (!options.body) {
+        traceReads.push(url);
+        assert.equal(url.searchParams.get('select'), 'details');
+        assert.equal(url.searchParams.get('stage'), 'eq.failed');
+        assert.equal(url.searchParams.get('order'), 'id.desc');
+        assert.equal(url.searchParams.get('limit'), '1');
+        if (traceReadFailure === 'throw') throw new Error('Fixture diagnostics unavailable');
+        if (traceReadFailure === 'response') return Response.json({ message: 'Fixture diagnostics unavailable' }, { status: 503 });
+        return Response.json(traces.filter(trace => trace.stage === 'failed'
+          && `eq.${trace.campaign_id}` === url.searchParams.get('campaign_id')
+          && `eq.${trace.turn_id}` === url.searchParams.get('turn_id')).slice(-1).map(trace => ({ details: trace.details })));
+      }
       traces.push(JSON.parse(String(options?.body)));
       return new Response(null, { status: 201 });
     }
@@ -78,7 +94,7 @@ function setup(t: TestContext, candidate: unknown, state = legacyWorld()) {
     unexpected.push(`${url.hostname}${url.pathname}`);
     throw new Error('Unexpected fixture request');
   });
-  return { paths, traces, commits, modelRequests };
+  return { paths, traces, commits, modelRequests, traceReads, setCandidate(next: unknown) { candidate = next; } };
 }
 function assertUncommitted(fixture: ReturnType<typeof setup>) {
   assert.equal(fixture.modelRequests.length, 1);
@@ -352,3 +368,110 @@ for (const [factId, error] of [['ruin', 'STORY_STALE_PROGRESS'], ['missing_token
     assert.deepEqual(world, original, 'invalid progress must discard tentative inventory changes too');
   });
 }
+
+function missingEvidenceProposal(): NarrativeProposal {
+  return { ...proposal, interpretation: 'PRIVATE_REJECTED_PROSE is not established history.', elapsedMinutes: 2,
+    storyPlan: { ...proposal.storyPlan, progress: [{ questId: 'mystery', factIds: ['unrecorded_reply'], claimIds: [] }] } };
+}
+function supportedReply(world: World): NarrativeProposal {
+  return { ...proposal, elapsedMinutes: 2,
+    operations: [{ op: 'establish_fact', fact: { id: 'tower_knocks', key: 'tower.knocks_after_name',
+      text: 'Three slow knocks sounded from the tower after you spoke the name.', subjects: ['player', 'tower'],
+      at: world.minute + 2, knownBy: ['player'] } }],
+    storyPlan: { ...proposal.storyPlan, progress: [{ questId: 'mystery', factIds: ['tower_knocks'], claimIds: [] }] } };
+}
+function plannerPayload(fixture: ReturnType<typeof setup>, index: number) {
+  const messages = fixture.modelRequests[index].messages as { content: string }[];
+  return JSON.parse(messages[1].content);
+}
+
+test('an explicit same-action retry learns from a missing fact rejection, commits once and replays without another lookup or model call', async t => {
+  const world = seedWorld(), original = structuredClone(world), input = 'I speak the name and listen.';
+  const fixture = setup(t, missingEvidenceProposal(), world);
+  const rejected = await turnPost(request(input));
+  assert.equal(rejected.status, 409);
+  assert.deepEqual(await rejected.json(), { error: 'STORY_UNKNOWN_FACT' });
+  assertUncommitted(fixture);
+  assert.equal(fixture.traceReads.length, 0, 'the ordinary first attempt does not read diagnostic history');
+  assert.equal(plannerPayload(fixture, 0).retryGuidance, undefined);
+  const fingerprint = proposalRequestFingerprint(input, world.revision);
+  assert.equal(fixture.traces.find(trace => trace.stage === 'failed')!.details.requestFingerprint, fingerprint);
+  assert.deepEqual(world, original);
+
+  fixture.setCandidate(supportedReply(world));
+  const response = await turnPost(request(input, 0, { retry: true }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(fixture.traceReads.length, 1);
+  assert.equal(fixture.traceReads[0].searchParams.get('campaign_id'), `eq.${campaignId}`);
+  assert.equal(fixture.traceReads[0].searchParams.get('turn_id'), `eq.${turnId}`);
+  assert.equal(fixture.modelRequests.length, 2, 'one proposal per explicit player submission');
+  const payload = plannerPayload(fixture, 1);
+  assert.equal(payload.input, input);
+  assert.equal(payload.retryGuidance.code, 'STORY_UNKNOWN_FACT');
+  assert.match(payload.retryGuidance.correction, /establish_fact/);
+  assert.doesNotMatch(JSON.stringify(payload), /PRIVATE_REJECTED_PROSE|unrecorded_reply/);
+  assert.ok(JSON.stringify(payload.state).length + JSON.stringify(payload.retryGuidance).length <= 24000);
+  assert.equal(fixture.commits.length, 1);
+  assert.equal(fixture.commits[0].p_result.id, turnId);
+  assert.equal(result.view.revision, original.revision + 1);
+  assert.equal(result.view.minute, original.minute + 2, 'rejection cannot advance time');
+  assert.deepEqual(replayVersioned(original, [{ engine_version: fixture.commits[0].p_engine,
+    proposal: fixture.commits[0].p_proposal }]), fixture.commits[0].p_state);
+  assert.doesNotMatch(JSON.stringify(result), /requestFingerprint|retryGuidance|proposal-retry-1|PRIVATE_REJECTED_PROSE/);
+  const contextTrace = fixture.traces.filter(trace => trace.stage === 'context').at(-1)!;
+  assert.deepEqual(contextTrace.details.retryGuidance, { version: 'proposal-retry-1', code: 'STORY_UNKNOWN_FACT',
+    chars: JSON.stringify(payload.retryGuidance).length });
+
+  const replay = await turnPost(request(input, 0, { retry: true }));
+  assert.deepEqual(await replay.json(), { turn: result.turn, replayed: true });
+  assert.equal(fixture.traceReads.length, 1, 'committed replay returns before diagnostic retrieval');
+  assert.equal(fixture.modelRequests.length, 2);
+  assert.equal(fixture.commits.length, 1);
+  assert.deepEqual(world, original);
+});
+
+for (const changed of ['input', 'revision', 'item', 'campaign', 'turn'] as const) {
+  test(`rejected-action guidance is not inherited after changing ${changed}`, async t => {
+    const world = seedWorld(), input = 'I speak the name and listen.';
+    const fixture = setup(t, missingEvidenceProposal(), world);
+    assert.equal((await turnPost(request(input))).status, 409);
+    if (changed === 'revision') world.revision = 1;
+    const candidate = supportedReply(world);
+    if (changed === 'item') candidate.itemActions = [{ action: 'use', itemId: 'journal', quantity: 1, recipientId: null }];
+    fixture.setCandidate(candidate);
+    const response = await turnPost(request(changed === 'input' ? 'I listen beside the tower.' : input, world.revision, {
+      retry: true,
+      ...(changed === 'item' ? { itemId: 'journal' } : {}),
+      ...(changed === 'campaign' ? { campaignId: '44444444-4444-4444-8444-444444444444' } : {}),
+      ...(changed === 'turn' ? { turnId: '55555555-5555-4555-8555-555555555555' } : {}),
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(fixture.traceReads.length, 1);
+    assert.equal(plannerPayload(fixture, 1).retryGuidance, undefined);
+    assert.equal(fixture.traces.filter(trace => trace.stage === 'context').at(-1)!.details.retryGuidance, undefined);
+  });
+}
+
+for (const traceReadFailure of ['response', 'throw'] as const) {
+  test(`diagnostic ${traceReadFailure} failure does not prevent an explicit retry from continuing`, async t => {
+    const world = seedWorld(), input = 'I speak the name and listen.';
+    const fixture = setup(t, supportedReply(world), world, { traceReadFailure });
+    const response = await turnPost(request(input, 0, { retry: true }));
+    assert.equal(response.status, 200);
+    assert.ok(fixture.traceReads.length >= 1, 'Supabase may retry a failed read within its bounded deadline');
+    assert.equal(fixture.modelRequests.length, 1);
+    assert.equal(fixture.commits.length, 1);
+    assert.equal(plannerPayload(fixture, 0).retryGuidance, undefined);
+  });
+}
+
+test('a repeated submission without the explicit retry flag does not fetch previous diagnostic guidance', async t => {
+  const world = seedWorld(), input = 'I speak the name and listen.';
+  const fixture = setup(t, missingEvidenceProposal(), world);
+  assert.equal((await turnPost(request(input))).status, 409);
+  fixture.setCandidate(supportedReply(world));
+  assert.equal((await turnPost(request(input))).status, 200);
+  assert.equal(fixture.traceReads.length, 0);
+  assert.equal(plannerPayload(fixture, 1).retryGuidance, undefined);
+});

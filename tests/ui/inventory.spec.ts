@@ -66,7 +66,7 @@ test('missing gear keeps the action, and item selection is part of retry identit
   const action='I use my staff to pry the gate open.';
   await page.getByRole('textbox',{name:'Your action'}).fill(action);
   await page.getByRole('button',{name:'Send action'}).click();
-  await expect(page.getByRole('status')).toContainText('You do not have the item needed for that action.');
+  await expect(page.getByRole('status')).toContainText('You’ll need something you aren’t carrying.');
   await expect(page.getByRole('textbox',{name:'Your action'})).toHaveValue(action);
   expect(requests).toHaveLength(1);
   expect(requests[0].itemId).toBeUndefined();
@@ -74,7 +74,7 @@ test('missing gear keeps the action, and item selection is part of retry identit
   await page.getByRole('button',{name:'Open inventory, 5 items'}).click();
   await page.getByRole('article',{name:'Weathered notebook, quantity 1',exact:true}).first().getByRole('button',{name:'Use',exact:true}).click();
   await page.getByRole('button',{name:'Send action'}).click();
-  await expect(page.getByRole('status')).toContainText('Your world is unchanged, and your text is kept.');
+  await expect(page.getByRole('status')).toContainText('Check your inventory, or describe another way forward.');
   await page.getByRole('button',{name:'Send action'}).click();
   await expect.poll(()=>requests.length).toBe(3);
   expect(requests[1].itemId).toBe('notebook-one');
@@ -108,13 +108,13 @@ test('a pending inventory action resumes with its item and UUID after reload',as
   await expect(page.getByRole('textbox',{name:'Your action'})).toHaveValue('I consume one Travel rations.');
   expect(requests).toHaveLength(0);
   await page.getByRole('button',{name:'Send action'}).click();
-  await expect(page.getByRole('status')).toContainText('The world update took too long.');
+  await expect(page.getByRole('status')).toContainText('That moment hasn’t unfolded yet. Your words are still here');
   await page.reload();
   await page.getByRole('button',{name:'Continue adventure',exact:true}).click();
   await expect(page.getByRole('group',{name:'Selected inventory item'})).toContainText('Travel rations');
   await page.getByRole('button',{name:'Send action'}).click();
   await expect.poll(()=>requests.length).toBe(2);
-  expect(requests[1]).toEqual(requests[0]);
+  expect(requests[1]).toEqual({...requests[0],retry:true});
 });
 
 test('reload clears a committed pending action and keeps only the text of an unavailable-item draft',async({page})=>{

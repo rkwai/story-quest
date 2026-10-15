@@ -5,6 +5,7 @@ import { ModelCallError } from '@/server/openrouter';
 import { reviewProposal } from '@/server/typesafe';
 import { recentConversation } from '@/server/conversation';
 import { normalizeProposal, type ProposalNormalization } from '@/server/proposal-normalization';
+import { previousProposalGuidance, proposalRequestFingerprint } from '@/server/proposal-retry';
 import { buildContext } from '@/engine/context';
 import { InventoryError, inventoryActionChanges, itemState } from '@/engine/inventory';
 import { applyNarrativeProposal, StoryError } from '@/engine/story';
@@ -12,11 +13,12 @@ import { playerView, publicChanges } from '@/engine/view';
 import { ENGINE_VERSION, EngineError, type World, type PublicTurn, type NarrativeProposal } from '@/engine/types';
 // Includes the 120s proposal deadline, advisory review and persistence margin.
 export const maxDuration = 150;
-const inputSchema = z.object({ campaignId: z.uuid(), turnId: z.uuid(), revision: z.number().int().min(0), input: z.string().trim().min(1).max(2000), itemId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/).optional() });
+const inputSchema = z.object({ campaignId: z.uuid(), turnId: z.uuid(), revision: z.number().int().min(0), input: z.string().trim().min(1).max(2000), itemId: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/).optional(), retry: z.boolean().optional() });
 export async function POST(request: Request) {
   let acquired: { campaign: string; owner: string; turn: string } | undefined;
   let candidate: NarrativeProposal | undefined;
   let normalization: ProposalNormalization | undefined;
+  let requestFingerprint: string | undefined;
   const start = performance.now();
   try {
     requireSameOrigin(request);
@@ -27,6 +29,7 @@ export async function POST(request: Request) {
     if (data.replayed) return Response.json({ turn: data.turn, replayed: true });
     acquired = { campaign: body.campaignId, owner, turn: body.turnId };
     const before = data.state as World;
+    requestFingerprint = proposalRequestFingerprint(body.input, before.revision, body.itemId);
     if (body.itemId) {
       // UI selections are untrusted too. Validate against the reserved snapshot,
       // before spending on a model call; unknown and unowned IDs look identical.
@@ -35,9 +38,12 @@ export async function POST(request: Request) {
       if (itemState(selected).quantity === 0) throw new InventoryError('ITEM_DEPLETED');
     }
     const recentTurns = await recentConversation(db, body.campaignId, before.revision);
-    const context = buildContext(before, body.input, 24000, recentTurns, body.itemId);
-    await trace(body.campaignId, body.turnId, 'context', performance.now()-start, { ...context.manifest, revision: before.revision, engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION });
-    const answer = await propose(context.state, body.input);
+    const retryGuidance = body.retry ? await previousProposalGuidance(db, body.campaignId, body.turnId, requestFingerprint) : undefined;
+    const retryChars = retryGuidance ? JSON.stringify(retryGuidance).length : 0;
+    const context = buildContext(before, body.input, 24000 - retryChars, recentTurns, body.itemId);
+    await trace(body.campaignId, body.turnId, 'context', performance.now()-start, { ...context.manifest, revision: before.revision, engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, requestFingerprint,
+      ...(retryGuidance ? { retryGuidance: { version: retryGuidance.version, code: retryGuidance.code, chars: retryChars } } : {}) });
+    const answer = await propose(context.state, body.input, retryGuidance);
     candidate = answer.data;
     const normalized = normalizeProposal(before, candidate);
     const proposal = normalized.proposal;
@@ -69,7 +75,7 @@ export async function POST(request: Request) {
     return Response.json({ turn: committed, view: playerView(after) });
   } catch (e) {
     if (acquired) {
-      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, ...(normalization ? { normalization } : {}), ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}), ...(e instanceof InventoryError ? { inventory: { status: 'blocked', code: e.code } } : {}), ...(e instanceof StoryError ? { story: { status: 'blocked', code: e.code } } : {}) });
+      await trace(acquired.campaign, acquired.turn, 'failed', performance.now()-start, { code: e instanceof EngineError ? e.code : 'INVALID_PROPOSAL', rejectedProposal: candidate ?? null, requestFingerprint, ...(normalization ? { normalization } : {}), ...(e instanceof ModelCallError ? { modelCall: e.metrics } : {}), ...(e instanceof InventoryError ? { inventory: { status: 'blocked', code: e.code } } : {}), ...(e instanceof StoryError ? { story: { status: 'blocked', code: e.code } } : {}) });
       await Promise.resolve(database().rpc('release_turn', { p_campaign: acquired.campaign, p_owner: acquired.owner, p_turn: acquired.turn })).catch(() => undefined);
     }
     return failure(e);

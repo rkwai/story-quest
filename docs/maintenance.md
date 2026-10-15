@@ -10,12 +10,20 @@ No public operator endpoint in the first slice. Inspect traces with privileged S
 
 ## Debugging a turn
 
-1. Confirm the play mode. The scripted preview has preset buttons and no model calls or hosted traces. For an AI adventure, find the campaign and turn ID from the UI error/report; query accepted turns and trace stages.
+1. Confirm the play mode. The scripted preview has preset buttons and no model calls or hosted traces. For an AI adventure, correlate the reported time, adventure and player action with private turns/traces; technical references are no longer displayed in the story UI.
 2. Check whether commit happened. If yes, do not resubmit a new action ID to recover narration.
 3. Replay the seed plus accepted proposals through the matching engine version and compare the snapshot.
 4. Inspect context IDs: was the relevant fact retrieved? Did interpretation, adjudication, validation or narration introduce the discrepancy?
 5. Add a regression scenario before changing prompts, retrieval or rules.
 6. Shadow-test against recorded inputs; compare state transitions, visibility, tokens and latency before releasing.
+
+### Player-facing recovery and explicit retries
+
+The player sees “Let’s pick up the thread,” retained words, and fixed Try again / Edit action controls, not `STORY_*`, model terminology or raw exceptions. Confirmed pre-commit failures can say the moment has not unfolded; connection/commit uncertainty must stay neutral. Never narrate a fictional failure or advance time to disguise an engine failure. Natural inventory restrictions may explain what is missing or unavailable without exposing hidden item names. Committed narration failures retain recorded changes and use Continue the narration; they never retry the world action.
+
+New `context` and `failed` traces include `requestFingerprint`, a SHA-256 digest of input, reserved revision and selected item. Explicit `retry:true` sends may read the latest failed trace scoped to campaign/turn (one result; 1.5-second deadline). Only matching fingerprints and allowlisted codes produce fixed `proposal-retry-1` guidance. Context traces record its version, code and character count. Unknown/malformed/legacy traces and read failures do not block play. There is no inference from rejected prose, no extra generation, and no change to quotas, leases or replay. A corrected retry still has to pass all engine checks. Use trace comparison to assess whether guidance improves real-model outcomes; mocked regression tests cannot establish that rate.
+
+For `STORY_UNKNOWN_FACT` or `STORY_UNKNOWN_CLAIM`, check whether progress cites an actual establish/reveal operation. The October 15 report cited a missing fact with no world operations at all. Discarding progress and committing elapsed time would not supply the missing interaction. Keep the whole attempt uncommitted, then have the DM resolve the original action on an explicit retry and record any justified answer/discovery before counting progress. Existing history and hidden knowledge remain authoritative.
 
 ## Useful operational queries
 

@@ -14,7 +14,7 @@ function StoryTurn({ turn, busy, onRetry, responseRef }: { turn: PublicTurn; bus
     <div className="turn-response" ref={responseRef} data-turn-id={turn.id} tabIndex={-1}>
       {turn.narration ? <article className="narration">{turn.narration.split('\n\n').map((paragraph, index) =>
         <p key={index}>{paragraph}</p>
-      )}</article> : <div className="fallback"><p>The outcome below is part of your story.</p>{onRetry &&
+      )}</article> : <div className="fallback"><p className="fallback-title">There’s more to tell.</p><p>Your choice has already shaped this moment. Follow what happened below while its telling waits.</p>{onRetry &&
         <button className="text-button" disabled={busy} onClick={() => onRetry(turn.id)}>Continue the narration</button>
       }</div>}
     </div>

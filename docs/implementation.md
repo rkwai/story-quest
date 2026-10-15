@@ -1,6 +1,16 @@
 # Implementation plan and status
 
-Updated: 2026-10-12. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+Updated: 2026-10-15. This file is the handoff across sessions. Checkboxes mean implemented and verified, not merely designed.
+
+## Immersive recovery — October 15, 2026
+
+Rick reported a visible `STORY_UNKNOWN_FACT` interruption. The recorded proposal claimed quest progress through a nonexistent fact and supplied no world operations. The engine correctly rejected the entire attempt; silently removing the progress and committing only elapsed time would leave the player's interaction unanswered.
+
+Recovery now lives beside the composer as “Let’s pick up the thread,” with retained words and fixed Try again / Edit action controls. Confirmed proposal rejections use a calm pause; network/commit uncertainty uses neutral wording. No technical references are rendered, and no invented obstacle is inserted into story history. Inventory restrictions give natural practical guidance. Committed narration has its own Continue the narration action, without resubmitting world changes. Existing focus, latest-first order and processing feedback remain intact.
+
+Prompt `dm-1.5.2` and private `proposal-retry-1` guidance make an explicit retry more informed. The route optionally reads one latest failed trace for the same campaign/turn, requires an exact input/revision/selected-item fingerprint, and maps allowlisted errors to bounded static corrections. The read has a 1.5-second deadline and fails open. Raw rejected prose, legacy traces without a matching fingerprint and other attempts never become guidance. Hint size shares the existing context budget; logs use existing trace stages. Replay still returns before any model/diagnostic lookup. No automatic paid retry, new migration, world reset or reducer change is required.
+
+Verification: TypeScript, all **166 backend regression tests**, the production build and all **18 phone browser scenarios** pass. Phone verification ran the full suite, then reran one existing inventory scenario after updating its old timeout-copy expectation. Coverage includes missing-fact rejection followed by an explicitly corrected retry, exact draft/revision/item/campaign/turn isolation, private-only feedback, unavailable diagnostics, idempotent replay, lost responses after commitment, duplicate-click guards, edited drafts, preserved focus and narration-only recovery. The recovery card was visually inspected at phone width with no overflow. An independent backend review found no blocker. All providers are mocked; no paid model calls or production gameplay mutations were made. Real-model retry success rates remain a monitoring/evaluation task. Release through GitHub master, then verify the exact production commit, health and an existing adventure projection.
 
 ## Repeated quest/rule declarations — October 12, 2026
 

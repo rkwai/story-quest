@@ -166,3 +166,36 @@ test('empty quests and old projections keep freeform input without live starter 
   await expect(page.getByRole('button',{name:'Ask the woman what happened'})).toHaveCount(0);
   await expect(page.getByRole('textbox',{name:'Your action'})).toBeVisible();
 });
+
+test('a committed choice with interrupted narration retries only its passage',async({page})=>{
+  const state=await mockAdventure(page);
+  const actions:{campaignId:string;turnId:string;input:string}[]=[];
+  const narrationRequests:{campaignId:string;turnId:string}[]=[];
+  await page.route('**/api/turns',async route=>{
+    const request=route.request().postDataJSON();actions.push(request);
+    state.view={...state.view,revision:1};
+    const turn:PublicTurn={id:request.turnId,input:request.input,interpretation:'You ask why she waits.',changes:['The woman tells you she is waiting for someone.'],narration:null,revision:1};
+    state.turns=[turn];
+    await route.fulfill({json:{view:state.view,turn}});
+  });
+  await page.route('**/api/narration',async route=>{
+    narrationRequests.push(route.request().postDataJSON());
+    await route.fulfill(narrationRequests.length===1?{status:503,json:{error:'MODEL_UNAVAILABLE'}}:{json:{narration:'“Someone made me a promise,” she says, looking down the empty road.'}});
+  });
+  const prompt=page.getByRole('textbox',{name:'Your action'});
+  await prompt.fill('Who are you waiting for?');
+  await page.getByRole('button',{name:'Send action',exact:true}).click();
+  await expect(page.getByText('Your choice has already shaped the story. Continue the narration below when you’re ready.',{exact:true})).toBeVisible();
+  await expect(page.getByText('There’s more to tell.',{exact:true})).toBeVisible();
+  await expect(prompt).toHaveValue('');
+  await expect(prompt).toBeEnabled();
+  await expect(page.getByRole('region',{name:'Let’s pick up the thread',exact:true})).toHaveCount(0);
+  expect(actions).toHaveLength(1);
+  expect(narrationRequests).toEqual([{campaignId,turnId:actions[0].turnId}]);
+  await page.getByRole('button',{name:'Continue the narration',exact:true}).click();
+  await expect(page.getByText('“Someone made me a promise,” she says, looking down the empty road.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Continue the narration',exact:true})).toHaveCount(0);
+  await expect(page.locator('.player-action')).toHaveCount(1);
+  expect(actions).toHaveLength(1);
+  expect(narrationRequests).toEqual(Array(2).fill({campaignId,turnId:actions[0].turnId}));
+});
